@@ -6,9 +6,9 @@ spring:
     name: inventory-service
 
   datasource:
-    url: jdbc:mysql://localhost:3306/store_db
+    url: jdbc:mysql://host.docker.internal:3307/store_db
     username: root
-    password: ellenverma
+    password: root
 
   jpa:
     hibernate:

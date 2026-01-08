@@ -1,0 +1,8 @@
+version: "3.9"
+
+services:
+  inventory-service:
+    image: inventory-service:latest
+    container_name: inventory-service
+    ports:
+      - "8081:8081"

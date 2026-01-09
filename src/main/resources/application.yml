@@ -1,17 +1,5 @@
-server:
-  port: 8081
-
 spring:
   application:
     name: inventory-service
-
-  datasource:
-    url: jdbc:mysql://host.docker.internal:3307/store_db
-    username: root
-    password: root
-
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-    open-in-view: false
+  config:
+    import: configserver:http://localhost:8850

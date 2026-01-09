@@ -18,6 +18,7 @@ import com.store.inventory.service.InventoryService;
 @RequestMapping("/api/inventory")
 public class InventoryController {
 
+    
     private final InventoryService service;
 
     public InventoryController(InventoryService service) {

@@ -1,0 +1,20 @@
+# Ignore compiled class files
+*.class
+
+# Ignore Maven / Gradle build output
+target/
+build/
+
+# Ignore logs
+*.log
+
+# Ignore IDE files (optional but recommended)
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS files
+.DS_Store

@@ -1,5 +1,6 @@
 spring:
   application:
     name: inventory-service
+
   config:
-    import: configserver:http://host.docker.internal:8850
+    import: optional:${CONFIG_SERVER_URL:configserver:http://localhost:8850}

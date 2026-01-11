@@ -3,12 +3,17 @@ version: "3.9"
 services:
   inventory-service:
     image: evanellenstore/inventory-service:latest
+    container_name: inventory-service
+
+    ports:
+      - "2011:2011"
+
     environment:
       DB_URL: jdbc:mysql://host.docker.internal:3307/store_db
       DB_USERNAME: root
       DB_PASSWORD: root
+
       CONFIG_SERVER_URL: configserver:http://host.docker.internal:8850
-      EUREKA_URL: http://host.docker.internal:9091/eureka    
-    container_name: inventory-service
-    ports:
-      - "8081:8081"
+      EUREKA_URL: http://host.docker.internal:9091/eureka
+
+    restart: always

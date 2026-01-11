@@ -15,7 +15,7 @@ import com.store.inventory.entity.Inventory;
 import com.store.inventory.service.InventoryService;
 
 @RestController
-@RequestMapping("/api/inventory")
+@RequestMapping("/inventory")
 public class InventoryController {
 
     

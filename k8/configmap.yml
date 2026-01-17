@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inventory-config
+  namespace: store
+data:
+  SPRING_PROFILES_ACTIVE: "k8"
+  DB_URL: "jdbc:mysql://mysql.store.svc.cluster.local:3306/store_db"
+  DB_USERNAME: "root"

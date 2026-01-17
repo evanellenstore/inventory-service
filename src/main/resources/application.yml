@@ -1,5 +1,7 @@
 spring:
   application:
     name: inventory-service
-  config:
-    import: configserver:http://localhost:8850
+  profiles:
+    active: local
+
+

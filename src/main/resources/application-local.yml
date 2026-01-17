@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    #url: jdbc:mysql://localhost:3306/store_db
+    url: jdbc:mysql://localhost:3306/store_db
+    username: root
+    password: ellenverma
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    open-in-view: false
+
+server:
+  port: 2011

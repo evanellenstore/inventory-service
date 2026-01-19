@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.store.inventory.dto.AdjustRequest;
-import com.store.inventory.dto.InventoryResponse;
+import com.store.inventory.dto.InventorySummaryResponse;
 import com.store.inventory.dto.ReserveRequest;
 import com.store.inventory.service.InventoryService;
 
@@ -24,13 +24,13 @@ public class InventoryController {
     private final InventoryService inventoryService;
 
     @GetMapping()
-    public List<InventoryResponse> getAll() {
+    public List<InventorySummaryResponse> getAll() {
         return  inventoryService.getAllInventory();
     }
 
 
     @GetMapping("/{productId}")
-    public InventoryResponse get(@PathVariable Long productId) {
+    public InventorySummaryResponse get(@PathVariable Long productId) {
         return inventoryService.getInventory(productId);
     }
 

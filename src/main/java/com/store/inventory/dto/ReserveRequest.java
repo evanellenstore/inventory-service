@@ -7,4 +7,5 @@ import lombok.Setter;
 public class ReserveRequest {
     private Integer quantity;
     private String referenceId;
+    
 }

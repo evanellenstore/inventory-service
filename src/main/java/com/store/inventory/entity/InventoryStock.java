@@ -3,12 +3,18 @@ package com.store.inventory.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(
     name = "inventory_stock",
-    uniqueConstraints = @UniqueConstraint(columnNames = "product_id")
+    uniqueConstraints = {
+        @UniqueConstraint(
+            columnNames = {"product_id", "expiry_date"}
+        )
+    }
 )
 @Getter
 @Setter
@@ -35,6 +41,24 @@ public class InventoryStock {
 
     @Column(name = "max_qty")
     private Integer maxQty;
+
+    @Column(nullable = false, unique = true)
+    private String batchNo;
+
+    @Column(name = "purchase_price")
+    private BigDecimal purchasePrice;
+
+
+    /* ✅ Manufacturing Date */
+    @Column(name = "manufacturing_date")
+    private LocalDate manufacturingDate;
+
+    /* ✅ Expiry Date */
+    @Column(name = "expiry_date", nullable = false)
+    private LocalDate expiryDate;
+    
+    @Column(nullable = false)
+    private LocalDateTime createdAt;   // ✅ ADD THIS
 
     @Version
     private Integer version;

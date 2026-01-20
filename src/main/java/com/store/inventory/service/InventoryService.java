@@ -133,6 +133,7 @@ public class InventoryService {
                     String batchNo = generateBatchNo(productId, req.getExpiryDate());
                     s.setBatchNo(batchNo);
                     s.setCreatedAt(LocalDateTime.now());
+                    s.setSupplierName(req.getSupplierName());
                     return s;
                 });
 
@@ -170,6 +171,7 @@ public class InventoryService {
                 .manufacturingDate(inv.getManufacturingDate())
                 .availableQty(inv.getAvailableQty())
                 .reservedQty(inv.getReservedQty())
+                .supplierName(inv.getSupplierName())    
                 .build();
     }
 
@@ -189,6 +191,7 @@ public class InventoryService {
                     b.setBatchNo(s.getBatchNo());
                     b.setExpiry(s.getExpiryDate().toString());
                     b.setQty(s.getAvailableQty());
+                    b.setSupplierName(s.getSupplierName());
                     return b;
                 })
                 .toList();
@@ -202,6 +205,7 @@ public class InventoryService {
         response.setProductName(product.getName());
         response.setTotalQty(totalQty);
         response.setBatches(batches);
+        
 
         return response;
     }

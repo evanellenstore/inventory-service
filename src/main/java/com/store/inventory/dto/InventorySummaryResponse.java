@@ -28,6 +28,7 @@ public class InventorySummaryResponse {
         private String batchNo;
         private String expiry;
         private Integer qty;
+        private String supplierName;
 
       
     }

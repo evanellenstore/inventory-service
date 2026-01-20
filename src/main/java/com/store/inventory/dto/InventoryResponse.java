@@ -16,4 +16,5 @@ public class InventoryResponse {
     private Integer maxQty;
     private LocalDate manufacturingDate;
     private LocalDate expiryDate;
+    private String supplierName;
 }

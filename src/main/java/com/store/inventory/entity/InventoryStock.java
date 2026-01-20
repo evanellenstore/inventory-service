@@ -48,17 +48,17 @@ public class InventoryStock {
     @Column(name = "purchase_price")
     private BigDecimal purchasePrice;
 
+    @Column(name = "supplier_name", nullable = false)
+    private String supplierName;
 
-    /* ✅ Manufacturing Date */
     @Column(name = "manufacturing_date")
     private LocalDate manufacturingDate;
 
-    /* ✅ Expiry Date */
     @Column(name = "expiry_date", nullable = false)
     private LocalDate expiryDate;
     
     @Column(nullable = false)
-    private LocalDateTime createdAt;   // ✅ ADD THIS
+    private LocalDateTime createdAt;   
 
     @Version
     private Integer version;

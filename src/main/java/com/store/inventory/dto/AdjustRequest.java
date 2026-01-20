@@ -14,4 +14,5 @@ public class AdjustRequest {
     private BigDecimal purchasePrice;
     private LocalDate manufacturingDate;
     private LocalDate expiryDate;
+    private String supplierName;
 }

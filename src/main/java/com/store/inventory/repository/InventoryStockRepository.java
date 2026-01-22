@@ -21,7 +21,8 @@ public interface InventoryStockRepository
 
     long countByProductIdAndExpiryDate(Long productId, LocalDate expiryDate);
 
-    List<InventoryStock> findByProductIdOrderByExpiryDateAscCreatedAtAsc(Long productId);
+    List<InventoryStock> findByProductIdOrderByExpiryDateAsc(Long productId);
+    
 
     
 

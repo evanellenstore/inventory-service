@@ -210,4 +210,9 @@ public class InventoryService {
         return response;
     }
 
+
+    public List<InventoryStock> getBatchesByProductId(Long productId) {
+        return stockRepo.findByProductIdOrderByExpiryDateAsc(productId);
+    }
+
 }

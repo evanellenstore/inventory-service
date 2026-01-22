@@ -7,11 +7,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.store.inventory.dto.AdjustRequest;
 import com.store.inventory.dto.InventorySummaryResponse;
 import com.store.inventory.dto.ReserveRequest;
+import com.store.inventory.entity.InventoryStock;
 import com.store.inventory.service.InventoryService;
 
 import lombok.RequiredArgsConstructor;
@@ -50,5 +52,12 @@ public class InventoryController {
     public void adjust(@PathVariable Long productId,
                        @RequestBody AdjustRequest req) {
         inventoryService.adjustStock(productId, req);
+    }
+
+    @GetMapping("/batches")
+    public List<InventoryStock> getBatches(
+            @RequestParam Long productId) {
+
+        return inventoryService.getBatchesByProductId(productId);
     }
 }

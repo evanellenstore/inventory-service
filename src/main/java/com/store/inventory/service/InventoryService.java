@@ -71,8 +71,8 @@ public class InventoryService {
     // RESERVE STOCK
     // -------------------------------
     @Transactional
-    public void reserveStock(Long productId, ReserveRequest req) {
-        InventoryStock stock = stockRepo.findByProductId(productId)
+    public void reserveStock(Long productId,String batchNo, ReserveRequest req) {
+        InventoryStock stock = stockRepo.findByProductIdAndBatchNo(productId, batchNo)
                 .orElseThrow(() -> new InventoryException("Stock not found"));
 
         if (stock.getAvailableQty() < req.getQuantity()) {

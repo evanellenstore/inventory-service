@@ -13,6 +13,8 @@ public interface InventoryStockRepository
         extends JpaRepository<InventoryStock, Long> {
 
     Optional<InventoryStock> findByProductId(Long productId);
+    
+    Optional<InventoryStock> findByProductIdAndBatchNo(Long productId, String batchNo);
 
     @Query("SELECT s FROM InventoryStock s WHERE s.productId = ?1")
     List<InventoryStock> getByProductId(Long productId);

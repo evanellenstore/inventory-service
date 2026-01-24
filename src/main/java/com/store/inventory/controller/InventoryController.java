@@ -37,9 +37,9 @@ public class InventoryController {
     }
 
     @PutMapping("/{productId}/reserve")
-    public void reserve(@PathVariable Long productId,
+    public void reserve(@PathVariable Long productId,@RequestParam String batchNo,
                         @RequestBody ReserveRequest req) {
-        inventoryService.reserveStock(productId, req);
+        inventoryService.reserveStock(productId, batchNo, req);
     }
 
     @PutMapping("/{productId}/release")

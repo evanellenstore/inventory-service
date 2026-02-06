@@ -25,9 +25,8 @@ public class InventoryController {
 
     @GetMapping()
     public List<InventoryResponse> getAll() {
-        return  inventoryService.getAllInventory();
+        return inventoryService.getAllInventory();
     }
-
 
     @GetMapping("/{productId}")
     public InventoryResponse get(@PathVariable Long productId) {
@@ -36,19 +35,29 @@ public class InventoryController {
 
     @PutMapping("/{productId}/reserve")
     public void reserve(@PathVariable Long productId,
-                        @RequestBody ReserveRequest req) {
+            @RequestBody ReserveRequest req) {
         inventoryService.reserveStock(productId, req);
     }
 
     @PutMapping("/{productId}/release")
     public void release(@PathVariable Long productId,
-                        @RequestBody ReserveRequest req) {
+            @RequestBody ReserveRequest req) {
         inventoryService.releaseStock(productId, req);
     }
 
     @PutMapping("/{productId}/adjust")
     public void adjust(@PathVariable Long productId,
-                       @RequestBody AdjustRequest req) {
+            @RequestBody AdjustRequest req) {
         inventoryService.adjustStock(productId, req);
+    }
+
+    @GetMapping("/product/all")
+    public List<InventoryResponse> getAllInventoryTransactions() {
+        return inventoryService.getAllInventoryTransactions();
+    }
+
+    @GetMapping("/product/{productId}")
+    public List<InventoryResponse> getInventoryByProductId(@PathVariable Long productId) {
+        return inventoryService.getInventoryByProductId(productId);
     }
 }

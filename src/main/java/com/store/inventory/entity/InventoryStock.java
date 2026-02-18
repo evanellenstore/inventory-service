@@ -3,12 +3,18 @@ package com.store.inventory.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(
     name = "inventory_stock",
-    uniqueConstraints = @UniqueConstraint(columnNames = "product_id")
+    uniqueConstraints = {
+        @UniqueConstraint(
+            columnNames = {"product_id", "expiry_date"}
+        )
+    }
 )
 @Getter
 @Setter
@@ -16,6 +22,8 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class InventoryStock {
+
+    public static final String Status = null;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -36,6 +44,24 @@ public class InventoryStock {
     @Column(name = "max_qty")
     private Integer maxQty;
 
+    @Column(nullable = false, unique = true)
+    private String batchNo;
+
+    @Column(name = "purchase_price")
+    private BigDecimal purchasePrice;
+
+    @Column(name = "supplier_name", nullable = false)
+    private String supplierName;
+
+    @Column(name = "manufacturing_date")
+    private LocalDate manufacturingDate;
+
+    @Column(name = "expiry_date", nullable = false)
+    private LocalDate expiryDate;
+    
+    @Column(nullable = false)
+    private LocalDateTime createdAt;   
+
     @Version
     private Integer version;
 
@@ -46,5 +72,10 @@ public class InventoryStock {
     @PreUpdate
     private void onUpdate() {
         this.lastUpdated = LocalDateTime.now();
+    }
+
+    public Object getStatus() {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'getStatus'");
     }
 }

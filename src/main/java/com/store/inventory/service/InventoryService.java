@@ -142,10 +142,21 @@ public class InventoryService {
         if (type == TransactionType.IN) {
             stock.setAvailableQty(stock.getAvailableQty() + req.getQuantity());
         } else if (type == TransactionType.OUT) {
-            if (stock.getAvailableQty() < req.getQuantity()) {
-                throw new InventoryException("Insufficient stock for OUT adjustment");
+            // OUT adjustment should consume from reserved quantities (items that were reserved during billing)
+            // If reserved qty is available, use it. Otherwise, use available qty (for non-reserved items)
+            if (stock.getReservedQty() >= req.getQuantity()) {
+                // Item was reserved during billing - decrease reserved quantity
+                stock.setReservedQty(stock.getReservedQty() - req.getQuantity());
+            } else if (stock.getAvailableQty() >= req.getQuantity()) {
+                // Item was NOT reserved - decrease available quantity (shouldn't happen in normal flow)
+                stock.setAvailableQty(stock.getAvailableQty() - req.getQuantity());
+            } else {
+                // Insufficient stock in either reserved or available
+                throw new InventoryException(
+                    String.format("Insufficient stock for OUT adjustment. Required: %d, Reserved: %d, Available: %d",
+                        req.getQuantity(), stock.getReservedQty(), stock.getAvailableQty())
+                );
             }
-            stock.setAvailableQty(stock.getAvailableQty() - req.getQuantity());
         }
 
         stockRepo.save(stock);
@@ -212,7 +223,13 @@ public class InventoryService {
 
 
     public List<InventoryStock> getBatchesByProductId(Long productId) {
-        return stockRepo.findByProductIdOrderByExpiryDateAsc(productId);
+        List<InventoryStock> batches = stockRepo.findByProductIdOrderByExpiryDateAsc(productId);
+        
+        // Filter to only include batches with available quantity
+        return batches.stream()
+                .filter(b -> b.getAvailableQty() != null && b.getAvailableQty() > 0)
+                .sorted(Comparator.comparing(InventoryStock::getExpiryDate))
+                .collect(Collectors.toList());
     }
 
 }

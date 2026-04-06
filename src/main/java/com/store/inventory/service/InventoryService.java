@@ -18,6 +18,7 @@ import com.store.inventory.dto.InventoryResponse;
 import com.store.inventory.dto.InventorySummaryResponse;
 import com.store.inventory.dto.ProductResponse;
 import com.store.inventory.dto.ReserveRequest;
+import com.store.inventory.dto.ReservedItemResponse;
 import com.store.inventory.entity.InventoryStock;
 import com.store.inventory.entity.InventoryTransaction;
 import com.store.inventory.entity.TransactionType;
@@ -97,8 +98,22 @@ public class InventoryService {
     // -------------------------------
     @Transactional
     public void releaseStock(Long productId, ReserveRequest req) {
-        InventoryStock stock = stockRepo.findByProductId(productId)
-                .orElseThrow(() -> new InventoryException("Stock not found"));
+        // Verify the reserve transaction exists (skip for demo data starting with DEMO_)
+        if (!req.getReferenceId().startsWith("DEMO_")) {
+            txRepo.findByProductIdAndReferenceIdAndType(
+                    productId, req.getReferenceId(), TransactionType.RESERVE)
+                    .stream()
+                    .findFirst()
+                    .orElseThrow(() -> new InventoryException("Reserve transaction not found"));
+        }
+
+        // Find the stock by checking which batch has reserved quantity
+        List<InventoryStock> stocks = stockRepo.getByProductId(productId);
+        
+        InventoryStock stock = stocks.stream()
+                .filter(s -> s.getReservedQty() >= req.getQuantity())
+                .findFirst()
+                .orElseThrow(() -> new InventoryException("No stock with sufficient reserved quantity"));
 
         if (stock.getReservedQty() < req.getQuantity()) {
             throw new InventoryException("Invalid release quantity");
@@ -187,8 +202,21 @@ public class InventoryService {
     }
 
     private InventorySummaryResponse toSummaryResponse(List<InventoryStock> stocks, Long productId) {
+        // ✅ If no stocks exist, return empty response with 0 quantities instead of throwing error
         if (stocks.isEmpty()) {
-            throw new RuntimeException("Product not found");
+            try {
+                ProductResponse product = productClient.getById(productId);
+                return InventorySummaryResponse.builder()
+                        .productId(String.valueOf(product.getId()))
+                        .productSku(product.getSku())
+                        .productName(product.getName())
+                        .totalQty(0)
+                        .batches(List.of())  // Empty batches list
+                        .build();
+            } catch (Exception e) {
+                // If product not found, throw appropriate exception
+                throw new InventoryException("Product not found: " + productId);
+            }
         }
 
         int totalQty = stocks.stream()
@@ -230,6 +258,62 @@ public class InventoryService {
                 .filter(b -> b.getAvailableQty() != null && b.getAvailableQty() > 0)
                 .sorted(Comparator.comparing(InventoryStock::getExpiryDate))
                 .collect(Collectors.toList());
+    }
+
+    // -------------------------------
+    // GET RESERVED ITEMS
+    // -------------------------------
+    public List<ReservedItemResponse> getReservedItems(Long productId) {
+        // Get all RESERVE transactions for this product
+        List<InventoryTransaction> reserveTransactions = txRepo.findByProductIdAndType(productId, TransactionType.RESERVE);
+        
+        // Get product details
+        final ProductResponse[] productArray = new ProductResponse[1];
+        try {
+            productArray[0] = productClient.getById(productId);
+        } catch (Exception e) {
+            // Product service might not be available, continue without it
+        }
+        
+        final ProductResponse product = productArray[0];
+        
+        // Map transactions to reserved items
+        return reserveTransactions.stream()
+                .map(tx -> ReservedItemResponse.builder()
+                        .referenceId(tx.getReferenceId())
+                        .quantity(tx.getQuantity())
+                        .reservedDate(tx.getCreatedAt())
+                        .sku(product != null ? product.getSku() : "N/A")
+                        .productName(product != null ? product.getName() : "Unknown Product")
+                        .productId(productId)
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    public List<ReservedItemResponse> getReservedItemAll() {
+        List<InventoryTransaction> reserveTransactions = txRepo.findByType(TransactionType.RESERVE);
+        Map<Long, List<InventoryTransaction>> grouped = reserveTransactions.stream()
+                .collect(Collectors.groupingBy(InventoryTransaction::getProductId));
+
+        List<ReservedItemResponse> result = new ArrayList<>();
+
+        grouped.forEach((productId, transactions) -> {
+            ProductResponse product = productClient.getById(productId);
+            List<ReservedItemResponse> items = transactions.stream()
+                    .map(tx -> ReservedItemResponse.builder()
+                            .referenceId(tx.getReferenceId())
+                            .quantity(tx.getQuantity())
+                            .reservedDate(tx.getCreatedAt())
+                            .sku(product != null ? product.getSku() : "N/A")
+                            .productName(product != null ? product.getName() : "Unknown Product")
+                            .productId(productId)
+                            .build())
+                    .collect(Collectors.toList());
+
+            result.addAll(items);
+        });
+
+        return result;
     }
 
 }

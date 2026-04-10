@@ -98,14 +98,12 @@ public class InventoryService {
     // -------------------------------
     @Transactional
     public void releaseStock(Long productId, ReserveRequest req) {
-        // Verify the reserve transaction exists (skip for demo data starting with DEMO_)
-        if (!req.getReferenceId().startsWith("DEMO_")) {
-            txRepo.findByProductIdAndReferenceIdAndType(
-                    productId, req.getReferenceId(), TransactionType.RESERVE)
-                    .stream()
-                    .findFirst()
-                    .orElseThrow(() -> new InventoryException("Reserve transaction not found"));
-        }
+        // Find the existing RESERVE transaction
+        InventoryTransaction reserveTx = txRepo.findByProductIdAndReferenceIdAndType(
+                productId, req.getReferenceId(), TransactionType.RESERVE)
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new InventoryException("Reserve transaction not found"));
 
         // Find the stock by checking which batch has reserved quantity
         List<InventoryStock> stocks = stockRepo.getByProductId(productId);
@@ -124,12 +122,26 @@ public class InventoryService {
 
         stockRepo.save(stock);
 
-        txRepo.save(InventoryTransaction.builder()
-                .productId(productId)
-                .type(TransactionType.RELEASE)
-                .quantity(req.getQuantity())
-                .referenceId(req.getReferenceId())
-                .build());
+        // Check if this is a full or partial release
+        int remainingReservedQty = reserveTx.getQuantity() - req.getQuantity();
+        
+        if (remainingReservedQty == 0) {
+            // Full release: Update the transaction type from RESERVE to IN
+            reserveTx.setType(TransactionType.IN);
+            txRepo.save(reserveTx);
+        } else {
+            // Partial release: Reduce the RESERVE transaction quantity and create new IN transaction
+            reserveTx.setQuantity(remainingReservedQty);
+            txRepo.save(reserveTx);
+            
+            // Create new IN transaction for the released quantity (stock going back to available)
+            txRepo.save(InventoryTransaction.builder()
+                    .productId(productId)
+                    .type(TransactionType.IN)
+                    .quantity(req.getQuantity())
+                    .referenceId(req.getReferenceId())
+                    .build());
+        }
     }
 
     // -------------------------------

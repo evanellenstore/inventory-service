@@ -15,4 +15,5 @@ public class AdjustRequest {
     private LocalDate manufacturingDate;
     private LocalDate expiryDate;
     private String supplierName;
+    private String referenceId;  // 🔑 To link OUT to RESERVE transaction
 }

@@ -188,12 +188,45 @@ public class InventoryService {
 
         stockRepo.save(stock);
 
-        txRepo.save(InventoryTransaction.builder()
-                .productId(productId)
-                .type(type)
-                .quantity(req.getQuantity())
-                .remarks(req.getRemarks())
-                .build());
+        // 🔑 KEY FIX: When OUT is requested, DELETE the RESERVE transaction and create OUT instead
+        if (type == TransactionType.OUT) {
+            // Look for ANY RESERVE transactions for this product (regardless of referenceId)
+            // Most RESERVE from billing have NULL referenceId initially
+            List<InventoryTransaction> reserveTxs = txRepo.findByProductIdAndType(productId, TransactionType.RESERVE);
+            
+            if (!reserveTxs.isEmpty()) {
+                // ✅ DELETE all RESERVE transactions for this product
+                for (InventoryTransaction reserveTx : reserveTxs) {
+                    txRepo.delete(reserveTx);
+                }
+                // Now create single OUT transaction to replace all RESERVE entries
+                txRepo.save(InventoryTransaction.builder()
+                        .productId(productId)
+                        .type(TransactionType.OUT)
+                        .quantity(req.getQuantity())
+                        .referenceId(req.getReferenceId())
+                        .remarks(req.getRemarks())
+                        .build());
+            } else {
+                // No RESERVE found, create new OUT transaction (for non-reserved items)
+                txRepo.save(InventoryTransaction.builder()
+                        .productId(productId)
+                        .type(type)
+                        .quantity(req.getQuantity())
+                        .referenceId(req.getReferenceId())
+                        .remarks(req.getRemarks())
+                        .build());
+            }
+        } else {
+            // For IN and other types, just create new transaction
+            txRepo.save(InventoryTransaction.builder()
+                    .productId(productId)
+                    .type(type)
+                    .quantity(req.getQuantity())
+                    .referenceId(req.getReferenceId())
+                    .remarks(req.getRemarks())
+                    .build());
+        }
     }
 
     private String generateBatchNo(Long productId, LocalDate expiryDate) {

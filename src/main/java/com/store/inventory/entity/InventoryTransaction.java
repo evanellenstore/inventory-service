@@ -31,6 +31,9 @@ public class InventoryTransaction {
     @Column(name = "reference_id")
     private String referenceId;
 
+    @Column(name = "bill_id")
+    private String billId;
+
     @Column(length = 255)
     private String remarks;
 

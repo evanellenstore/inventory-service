@@ -90,6 +90,7 @@ public class InventoryService {
                 .type(TransactionType.RESERVE)
                 .quantity(req.getQuantity())
                 .referenceId(req.getReferenceId())
+                .billId(req.getReferenceId())
                 .build());
     }
 
@@ -140,6 +141,7 @@ public class InventoryService {
                     .type(TransactionType.IN)
                     .quantity(req.getQuantity())
                     .referenceId(req.getReferenceId())
+                    .billId(reserveTx.getBillId())
                     .build());
         }
     }
@@ -205,6 +207,7 @@ public class InventoryService {
                         .type(TransactionType.OUT)
                         .quantity(req.getQuantity())
                         .referenceId(req.getReferenceId())
+                        .billId(req.getReferenceId())
                         .remarks(req.getRemarks())
                         .build());
             } else {
@@ -214,6 +217,7 @@ public class InventoryService {
                         .type(type)
                         .quantity(req.getQuantity())
                         .referenceId(req.getReferenceId())
+                        .billId(req.getReferenceId())
                         .remarks(req.getRemarks())
                         .build());
             }
@@ -224,6 +228,7 @@ public class InventoryService {
                     .type(type)
                     .quantity(req.getQuantity())
                     .referenceId(req.getReferenceId())
+                    .billId(req.getReferenceId())
                     .remarks(req.getRemarks())
                     .build());
         }

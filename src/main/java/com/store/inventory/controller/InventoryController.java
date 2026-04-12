@@ -72,4 +72,9 @@ public class InventoryController {
 
         return inventoryService.getBatchesByProductId(productId);
     }
+
+    @GetMapping("/report")
+    public List<?> getInventoryReports() {
+        return inventoryService.getInventoryReports();
+    }
 }

@@ -16,6 +16,7 @@ import com.store.inventory.client.ProductServiceClient;
 import com.store.inventory.dto.AdjustRequest;
 import com.store.inventory.dto.InventoryResponse;
 import com.store.inventory.dto.InventorySummaryResponse;
+import com.store.inventory.dto.InventoryReportDTO;
 import com.store.inventory.dto.ProductResponse;
 import com.store.inventory.dto.ReserveRequest;
 import com.store.inventory.dto.ReservedItemResponse;
@@ -364,6 +365,30 @@ public class InventoryService {
         });
 
         return result;
+    }
+
+    /**
+     * Get aggregated inventory report data (for reporting service)
+     * Groups inventory by productId and calculates total available and reserved quantities
+     */
+    public List<InventoryReportDTO> getInventoryReports() {
+        List<InventoryStock> stocks = stockRepo.findAll();
+
+        // Group stocks by productId and sum quantities
+        Map<Long, List<InventoryStock>> groupedByProduct = stocks.stream()
+                .collect(Collectors.groupingBy(InventoryStock::getProductId));
+
+        return groupedByProduct.entrySet().stream()
+                .map(entry -> InventoryReportDTO.builder()
+                        .productId(entry.getKey())
+                        .availableQty((int) entry.getValue().stream()
+                                .mapToLong(InventoryStock::getAvailableQty)
+                                .sum())
+                        .reservedQty((int) entry.getValue().stream()
+                                .mapToLong(InventoryStock::getReservedQty)
+                                .sum())
+                        .build())
+                .collect(Collectors.toList());
     }
 
 }

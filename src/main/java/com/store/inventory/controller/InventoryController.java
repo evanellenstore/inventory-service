@@ -27,8 +27,18 @@ public class InventoryController {
     private final InventoryService inventoryService;
 
     @GetMapping()
-    public List<InventorySummaryResponse> getAll() {
-        return  inventoryService.getAllInventory();
+    public List<InventorySummaryResponse> getAll(
+            @RequestParam(required = false) String stockStatus,
+            @RequestParam(required = false) String expiryStatus) {
+        
+        // If any filter is provided, use the filtered endpoint
+        if ((stockStatus != null && !stockStatus.isEmpty()) || 
+            (expiryStatus != null && !expiryStatus.isEmpty())) {
+            return inventoryService.getInventoryFiltered(stockStatus, expiryStatus);
+        }
+        
+        // Otherwise return all
+        return inventoryService.getAllInventory();
     }
 
 

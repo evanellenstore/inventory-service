@@ -37,6 +37,10 @@ public class InventoryService {
     private final InventoryTransactionRepository txRepo;
     private final ProductServiceClient productClient;
 
+    // Constants for filtering
+    private static final int LOW_STOCK_LIMIT = 10;
+    private static final int EXPIRY_WARNING_DAYS = 30;
+
     // -------------------------------
     // GET INVENTORY
     // -------------------------------
@@ -67,6 +71,111 @@ public class InventoryService {
 
         return response;
 
+    }
+
+    /**
+     * Get inventory with optional filtering by stock status and expiry status
+     */
+    public List<InventorySummaryResponse> getInventoryFiltered(String stockStatus, String expiryStatus) {
+        List<InventoryStock> stocks = stockRepo.findAll();
+
+        // Group stocks by productId
+        Map<Long, List<InventoryStock>> groupedByProduct = stocks.stream()
+                .collect(Collectors.groupingBy(InventoryStock::getProductId));
+
+        List<InventorySummaryResponse> response = new ArrayList<>();
+
+        for (Map.Entry<Long, List<InventoryStock>> entry : groupedByProduct.entrySet()) {
+            Long productId = entry.getKey();
+            List<InventoryStock> productStocks = entry.getValue();
+
+            InventorySummaryResponse summary = toSummaryResponse(productStocks, productId);
+
+            // Apply stock status filter
+            if (stockStatus != null && !stockStatus.isEmpty() && !stockStatus.equals("all")) {
+                boolean matchesStockStatus = matchesStockStatus(summary.getBatches(), stockStatus);
+                if (!matchesStockStatus) {
+                    continue;
+                }
+            }
+
+            // Apply expiry status filter
+            if (expiryStatus != null && !expiryStatus.isEmpty() && !expiryStatus.equals("all")) {
+                boolean matchesExpiryStatus = matchesExpiryStatus(summary.getBatches(), expiryStatus);
+                if (!matchesExpiryStatus) {
+                    continue;
+                }
+            }
+
+            response.add(summary);
+        }
+
+        return response;
+    }
+
+    private boolean matchesStockStatus(List<InventorySummaryResponse.BatchSummary> batches, String stockStatus) {
+        if (batches == null || batches.isEmpty()) {
+            return stockStatus.equals("low");
+        }
+
+        if ("low".equals(stockStatus)) {
+            // Check if ANY batch has low stock (qty <= LOW_STOCK_LIMIT)
+            return batches.stream()
+                    .anyMatch(b -> b.getQty() != null && b.getQty() <= LOW_STOCK_LIMIT);
+        } else if ("in-stock".equals(stockStatus)) {
+            // Check if ALL batches have sufficient stock (qty > LOW_STOCK_LIMIT)
+            return batches.stream()
+                    .allMatch(b -> b.getQty() != null && b.getQty() > LOW_STOCK_LIMIT);
+        }
+
+        return true;
+    }
+
+    private boolean matchesExpiryStatus(List<InventorySummaryResponse.BatchSummary> batches, String expiryStatus) {
+        if (batches == null || batches.isEmpty()) {
+            return false;
+        }
+
+        LocalDate today = LocalDate.now();
+
+        if ("expired".equals(expiryStatus)) {
+            // Check if ANY batch is expired
+            return batches.stream()
+                    .anyMatch(b -> {
+                        try {
+                            LocalDate expiry = LocalDate.parse(b.getExpiry());
+                            return expiry.isBefore(today);
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    });
+        } else if ("near-expiry".equals(expiryStatus)) {
+            // Check if ANY batch expires within EXPIRY_WARNING_DAYS
+            return batches.stream()
+                    .anyMatch(b -> {
+                        try {
+                            LocalDate expiry = LocalDate.parse(b.getExpiry());
+                            long daysUntilExpiry = java.time.temporal.ChronoUnit.DAYS.between(today, expiry);
+                            return daysUntilExpiry >= 0 && daysUntilExpiry <= EXPIRY_WARNING_DAYS;
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    });
+        } else if ("valid".equals(expiryStatus)) {
+            // Check if ALL batches are valid (not expired and not near expiry)
+            return batches.stream()
+                    .allMatch(b -> {
+                        try {
+                            LocalDate expiry = LocalDate.parse(b.getExpiry());
+                            long daysUntilExpiry = java.time.temporal.ChronoUnit.DAYS.between(today, expiry);
+                            return daysUntilExpiry > EXPIRY_WARNING_DAYS;
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    });
+        }
+
+        return true;
     }
 
     // -------------------------------

@@ -54,7 +54,7 @@ public class InventoryStock {
     @Column(name = "manufacturing_date")
     private LocalDate manufacturingDate;
 
-    @Column(name = "expiry_date", nullable = false)
+    @Column(name = "expiry_date")
     private LocalDate expiryDate;
     
     @Column(nullable = false)

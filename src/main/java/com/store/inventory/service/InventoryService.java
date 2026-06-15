@@ -261,20 +261,54 @@ public class InventoryService {
     // -------------------------------
     @Transactional
     public void adjustStock(Long productId, AdjustRequest req) {
-        InventoryStock stock = stockRepo.findByProductIdAndExpiryDate(productId, req.getExpiryDate())
-                .orElseGet(() -> {
-                    InventoryStock s = new InventoryStock();
-                    s.setProductId(productId);
-                    s.setAvailableQty(0);
-                    s.setReservedQty(0);
-                    s.setManufacturingDate(req.getManufacturingDate());
-                    s.setExpiryDate(req.getExpiryDate());
-                    String batchNo = generateBatchNo(productId, req.getExpiryDate());
-                    s.setBatchNo(batchNo);
-                    s.setCreatedAt(LocalDateTime.now());
-                    s.setSupplierName(req.getSupplierName());
-                    return s;
-                });
+        InventoryStock stock;
+        LocalDate expiryDate;
+        
+        // Handle null expiryDate - returns and general adjustments don't have expiry info
+        if (req.getExpiryDate() == null) {
+            // For returns (FIFO principle): fetch the oldest batch for this product
+            List<InventoryStock> existingStocks = stockRepo.findByProductIdOrderByExpiryDateAsc(productId);
+            
+            if (!existingStocks.isEmpty()) {
+                // Add returned item to the oldest batch
+                stock = existingStocks.get(0);
+                expiryDate = stock.getExpiryDate();
+            } else {
+                // No existing stock for this product - use default far-future expiry
+                expiryDate = LocalDate.now().plusYears(5);
+                stock = stockRepo.findByProductIdAndExpiryDate(productId, expiryDate)
+                        .orElseGet(() -> {
+                            InventoryStock s = new InventoryStock();
+                            s.setProductId(productId);
+                            s.setAvailableQty(0);
+                            s.setReservedQty(0);
+                            s.setManufacturingDate(req.getManufacturingDate());
+                            s.setExpiryDate(expiryDate);
+                            String batchNo = generateBatchNo(productId, expiryDate);
+                            s.setBatchNo(batchNo);
+                            s.setCreatedAt(LocalDateTime.now());
+                            s.setSupplierName("RETURN");
+                            return s;
+                        });
+            }
+        } else {
+            // Find stock with specific expiry date (purchase scenario)
+            expiryDate = req.getExpiryDate();
+            stock = stockRepo.findByProductIdAndExpiryDate(productId, expiryDate)
+                    .orElseGet(() -> {
+                        InventoryStock s = new InventoryStock();
+                        s.setProductId(productId);
+                        s.setAvailableQty(0);
+                        s.setReservedQty(0);
+                        s.setManufacturingDate(req.getManufacturingDate());
+                        s.setExpiryDate(expiryDate);
+                        String batchNo = generateBatchNo(productId, expiryDate);
+                        s.setBatchNo(batchNo);
+                        s.setCreatedAt(LocalDateTime.now());
+                        s.setSupplierName(req.getSupplierName());
+                        return s;
+                    });
+        }
 
         TransactionType type = TransactionType.valueOf(req.getType());
 
@@ -345,6 +379,9 @@ public class InventoryService {
     }
 
     private String generateBatchNo(Long productId, LocalDate expiryDate) {
+        if (expiryDate == null) {
+            return "P" + productId + "-NOEXP-" + System.currentTimeMillis();
+        }
         return "P" + productId + "-" +
                 expiryDate.format(DateTimeFormatter.BASIC_ISO_DATE);
     }

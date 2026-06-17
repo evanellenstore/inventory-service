@@ -18,6 +18,9 @@ public class InventorySummaryResponse {
     private String productName;
     private String unit;
     private Integer totalQty;
+    private Double price;
+    private Double discountAmount;
+    private Double total;
     private List<BatchSummary> batches;
 
     @Setter

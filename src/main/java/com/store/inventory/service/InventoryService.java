@@ -409,6 +409,9 @@ public class InventoryService {
                         .productName(product.getName())
                         .unit(product.getUnit())
                         .totalQty(0)
+                    .price(product.getPrice() != null ? product.getPrice() : 0.0)
+                    .discountAmount(product.getDiscountAmount() != null ? product.getDiscountAmount() : 0.0)
+                    .total(Math.max(0.0, (product.getPrice() != null ? product.getPrice() : 0.0) - (product.getDiscountAmount() != null ? product.getDiscountAmount() : 0.0)) * 0)
                         .batches(List.of())  // Empty batches list
                         .build();
             } catch (Exception e) {
@@ -442,6 +445,11 @@ public class InventoryService {
         response.setProductName(product.getName());
         response.setUnit(product.getUnit());
         response.setTotalQty(totalQty);
+        double priceVal = product.getPrice() != null ? product.getPrice() : 0.0;
+        double discountVal = product.getDiscountAmount() != null ? product.getDiscountAmount() : 0.0;
+        response.setPrice(priceVal);
+        response.setDiscountAmount(discountVal);
+        response.setTotal(Math.max(0.0, priceVal - discountVal) * totalQty);
         response.setBatches(batches);
         
 

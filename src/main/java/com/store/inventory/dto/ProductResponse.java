@@ -18,5 +18,6 @@ public class ProductResponse {
     private String brand;
     private String unit;
     private Double price;
+    private Double discountAmount;
     private String status;
 }

@@ -407,6 +407,7 @@ public class InventoryService {
                         .productId(String.valueOf(product.getId()))
                         .productSku(product.getSku())
                         .productName(product.getName())
+                        .unit(product.getUnit())
                         .totalQty(0)
                         .batches(List.of())  // Empty batches list
                         .build();
@@ -439,6 +440,7 @@ public class InventoryService {
         response.setProductId(String.valueOf(product.getId()));
         response.setProductSku(product.getSku());
         response.setProductName(product.getName());
+        response.setUnit(product.getUnit());
         response.setTotalQty(totalQty);
         response.setBatches(batches);
         
@@ -535,6 +537,37 @@ public class InventoryService {
                                 .sum())
                         .build())
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Search inventory by product name. Uses product service to find products
+     * matching the name, then returns inventory summaries for each product.
+     */
+    public List<InventorySummaryResponse> searchByProductName(String name) {
+        List<ProductResponse> products = null;
+        try {
+            products = productClient.getByName(name);
+        } catch (Exception e) {
+            // Could not reach product service or other Feign error — avoid 500 and return empty list
+            // Log the exception to stdout for diagnostics
+            System.err.println("Warning: failed to call product-service.getByName: " + e.getMessage());
+            return List.of();
+        }
+
+        List<InventorySummaryResponse> result = new ArrayList<>();
+        for (ProductResponse p : products) {
+            try {
+                result.add(getInventory(p.getId()));
+            } catch (Exception e) {
+                // If inventory missing for a product, still include empty summary
+                try {
+                    result.add(toSummaryResponse(new ArrayList<>(), p.getId()));
+                } catch (Exception ex) {
+                    // ignore
+                }
+            }
+        }
+        return result;
     }
 
 }

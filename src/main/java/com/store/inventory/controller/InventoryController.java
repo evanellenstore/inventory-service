@@ -41,6 +41,11 @@ public class InventoryController {
         return inventoryService.getAllInventory();
     }
 
+    @GetMapping("/search")
+    public List<InventorySummaryResponse> searchByName(@RequestParam String name) {
+        return inventoryService.searchByProductName(name);
+    }
+
 
     @GetMapping("/{productId}")
     public InventorySummaryResponse get(@PathVariable Long productId) {

@@ -16,6 +16,7 @@ public class InventorySummaryResponse {
     private String productId;
     private String productSku;
     private String productName;
+    private String unit;
     private Integer totalQty;
     private List<BatchSummary> batches;
 

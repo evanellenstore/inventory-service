@@ -15,9 +15,10 @@ public class ProductResponse {
     private String name;
     private String description;
     private String category;
-    private String brand;
     private String unit;
     private Double price;
     private Double discountAmount;
     private String status;
+     private Long brandId;
+    private String brandName;
 }

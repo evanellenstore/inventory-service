@@ -17,6 +17,9 @@ public class InventorySummaryResponse {
     private String productSku;
     private String productName;
     private String unit;
+    private String brandName;
+    private Long brandId;
+    private String categoryName;
     private Integer totalQty;
     private Double price;
     private Double discountAmount;

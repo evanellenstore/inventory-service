@@ -15,6 +15,6 @@ public interface ProductServiceClient {
     public ProductResponse getById(@PathVariable Long id);
 
     @GetMapping("/products/search/name")
-    public List<ProductResponse> getByName(@RequestParam("name") String name);
+    public List<ProductResponse> getByName(@RequestParam("name") String name, @RequestParam("language") String language);
 
 }

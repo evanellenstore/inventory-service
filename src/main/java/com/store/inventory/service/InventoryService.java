@@ -44,7 +44,6 @@ public class InventoryService {
     // -------------------------------
     // GET INVENTORY
     // -------------------------------
-
     public InventorySummaryResponse getInventory(Long productId) {
 
         List<InventoryStock> stocks = stockRepo.getByProductId(productId);
@@ -408,6 +407,9 @@ public class InventoryService {
                         .productSku(product.getSku())
                         .productName(product.getName())
                         .unit(product.getUnit())
+                        .brandName(product.getBrandName())
+                        .brandId(product.getBrandId())
+                        .categoryName(product.getCategory())
                         .totalQty(0)
                     .price(product.getPrice() != null ? product.getPrice() : 0.0)
                     .discountAmount(product.getDiscountAmount() != null ? product.getDiscountAmount() : 0.0)
@@ -444,6 +446,10 @@ public class InventoryService {
         response.setProductSku(product.getSku());
         response.setProductName(product.getName());
         response.setUnit(product.getUnit());
+        // Populate brand and category from product service
+        response.setBrandName(product.getBrandName());
+        response.setBrandId(product.getBrandId());
+        response.setCategoryName(product.getCategory());
         response.setTotalQty(totalQty);
         double priceVal = product.getPrice() != null ? product.getPrice() : 0.0;
         double discountVal = product.getDiscountAmount() != null ? product.getDiscountAmount() : 0.0;
@@ -551,10 +557,10 @@ public class InventoryService {
      * Search inventory by product name. Uses product service to find products
      * matching the name, then returns inventory summaries for each product.
      */
-    public List<InventorySummaryResponse> searchByProductName(String name) {
+    public List<InventorySummaryResponse> searchByProductName(String name, String language) {
         List<ProductResponse> products = null;
         try {
-            products = productClient.getByName(name);
+            products = productClient.getByName(name,language);
         } catch (Exception e) {
             // Could not reach product service or other Feign error — avoid 500 and return empty list
             // Log the exception to stdout for diagnostics

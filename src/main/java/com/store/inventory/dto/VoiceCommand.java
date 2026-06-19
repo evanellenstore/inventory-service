@@ -16,5 +16,6 @@ public class VoiceCommand {
     private String productName;
     private Integer qty;
     private String unit;
+    private String brand;
 
 }

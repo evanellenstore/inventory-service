@@ -20,6 +20,9 @@ public class InventorySummaryResponse {
     private String brandName;
     private Long brandId;
     private String categoryName;
+    private boolean loose;
+    private Double packetSize;
+    private String packetUnit;
     private Integer totalQty;
     private Double price;
     private Double discountAmount;

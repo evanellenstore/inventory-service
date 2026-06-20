@@ -406,7 +406,10 @@ public class InventoryService {
                         .productId(String.valueOf(product.getId()))
                         .productSku(product.getSku())
                         .productName(product.getName())
-                        .unit(product.getUnit())
+                            .unit(product.getUnit())
+                            .loose(product.isLoose())
+                            .packetSize(product.getPacketSize())
+                            .packetUnit(product.getPacketUnit())
                         .brandName(product.getBrandName())
                         .brandId(product.getBrandId())
                         .categoryName(product.getCategory())
@@ -446,6 +449,9 @@ public class InventoryService {
         response.setProductSku(product.getSku());
         response.setProductName(product.getName());
         response.setUnit(product.getUnit());
+        response.setLoose(product.isLoose());
+        response.setPacketSize(product.getPacketSize());
+        response.setPacketUnit(product.getPacketUnit());
         // Populate brand and category from product service
         response.setBrandName(product.getBrandName());
         response.setBrandId(product.getBrandId());

@@ -21,4 +21,7 @@ public class ProductResponse {
     private String status;
      private Long brandId;
     private String brandName;
+    private boolean loose;
+    private Double packetSize;
+    private String packetUnit;
 }

@@ -45,10 +45,10 @@ public final class HelperUtilities {
                 targetCartQty = (int) Math.ceil((requestedQty * 1000.0) / packetSize);
             } else if ("g".equals(voiceUnit) && "kg".equals(packetUnit)) {
                 targetCartQty = (int) Math.ceil((requestedQty / 1000.0) / packetSize);
-            } else if ("g".equals(voiceUnit) && "g".equals(packetUnit)) {
+            } else if ("g".equals(voiceUnit) && "g".equals(packetUnit)  && requestedQty % packetSize == 0) {
                 targetCartQty = (int) Math.ceil(requestedQty / packetSize);
-            } else if ("kg".equals(voiceUnit) && "kg".equals(packetUnit)) {
-                targetCartQty = (int) Math.ceil(requestedQty / packetSize);
+            } else if ("kg".equals(voiceUnit) && "kg".equals(packetUnit) && requestedQty % packetSize == 0) { 
+                    targetCartQty = (int) (requestedQty / packetSize);  
             }
         } // Fixed missing closing brace
 
@@ -58,9 +58,9 @@ public final class HelperUtilities {
                 targetCartQty = (int) Math.ceil((requestedQty * 1000.0) / packetSize);
             } else if ("ml".equals(voiceUnit) && "l".equals(packetUnit)) {
                 targetCartQty = (int) Math.ceil((requestedQty / 1000.0) / packetSize);
-            } else if ("ml".equals(voiceUnit) && "ml".equals(packetUnit)) {
+            } else if ("ml".equals(voiceUnit) && "ml".equals(packetUnit) && requestedQty % packetSize == 0) {
                 targetCartQty = (int) Math.ceil(requestedQty / packetSize);
-            } else if ("l".equals(voiceUnit) && "l".equals(packetUnit)) {
+            } else if ("l".equals(voiceUnit) && "l".equals(packetUnit) && requestedQty % packetSize == 0) {
                 targetCartQty = (int) Math.ceil(requestedQty / packetSize);
             }  
         }

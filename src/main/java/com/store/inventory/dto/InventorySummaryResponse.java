@@ -22,6 +22,7 @@ public class InventorySummaryResponse {
     private String categoryName;
     private boolean loose;
     private Double packetSize;
+     private Double productSize;
     private String packetUnit;
     private Integer totalQty;
     private Double price;

@@ -1,9 +1,9 @@
 package com.store.inventory.controller;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -24,6 +24,7 @@ import com.store.inventory.dto.ReservedItemResponse;
 import com.store.inventory.dto.VoiceCommand;
 import com.store.inventory.entity.InventoryStock;
 import com.store.inventory.service.InventoryService;
+import com.store.inventory.utilty.HelperUtilities;
 
 import lombok.RequiredArgsConstructor;
 import tools.jackson.databind.ObjectMapper;
@@ -94,8 +95,7 @@ public class InventoryController {
 
 
 
-    //================ For Voice Integration ===========================
-    @PostMapping("/search")
+   @PostMapping("/search")
     public ResponseEntity<?> searchByName(@RequestBody Map<String, String> request) {
         String language = request.get("language");
         String textJson = request.get("text");
@@ -107,7 +107,6 @@ public class InventoryController {
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid voice command", "details", e.getMessage()));
         }
 
-        // Delegate execution to the optimized processing engine method
         return processVoiceSearch(command, language);
     }
 
@@ -138,70 +137,56 @@ public class InventoryController {
             .map(InventorySummaryResponse::getBrandName)
             .filter(b -> b != null && !b.isEmpty())
             .distinct()
-            .collect(Collectors.toList());
+            .collect(Collectors.toList());     
             
         if (rawBrands.size() > 1) {
-            return buildMultiBrandResponse(rawBrands, resultList, requestedQty, requestedUnit);
+            return HelperUtilities.buildMultiBrandResponse(rawBrands, resultList, requestedQty, requestedUnit);
         }
 
-        // Step 3: Single-brand structural measurement units filter
-        List<InventorySummaryResponse> filtered = resultList;
-        if (requestedUnit != null && !requestedUnit.isEmpty() && requestedQty > 0) {
-            final String voiceUnit = requestedUnit.trim().toLowerCase();
-            final double requestedAmountInKg = toKg(requestedQty, voiceUnit);
-            final double requestedAmountInL = toLitre(requestedQty, voiceUnit);
+        // Step 3: Run structural unit matching measurements filter
+        List<InventorySummaryResponse> filtered = HelperUtilities.filterInventoryByUnit(resultList, requestedUnit, requestedQty);
 
-            filtered = resultList.stream()
-                    .filter(r -> {
-                        if (r.getTotalQty() == null) return false;
-                        String productUnit = r.getUnit() != null ? r.getUnit().trim().toLowerCase() : "";
+        // ================= CLEAN MIXED-PACKAGING ROW CHECK =================
+        if (filtered.size() > 1) {
+            boolean firstIsLoose = filtered.get(0).isLoose() == Boolean.TRUE; 
+            boolean hasAmbiguity = false;
 
-                        if (!productUnit.isEmpty() && productUnit.equalsIgnoreCase(voiceUnit)) {
-                            return r.getTotalQty() >= requestedQty;
-                        }
+            for (int i = 1; i < filtered.size(); i++) {
+                boolean currentIsLoose = filtered.get(i).isLoose() == Boolean.TRUE;
+                if (currentIsLoose != firstIsLoose) {
+                    hasAmbiguity = true;
+                    break;
+                }
+            }
 
-                        if (requestedAmountInKg > 0 && !isWeightUnit(productUnit)) {
-                            Double packetKg = parseWeightKgFromText(r.getProductName());
-                            if (packetKg == null) packetKg = parseWeightKgFromText(r.getProductSku());
-                            if (packetKg == null) return false;
-                            return r.getTotalQty() >= (int) Math.ceil(requestedAmountInKg / packetKg);
-                        }
-
-                        if (requestedAmountInL > 0 && !isVolumeUnit(productUnit)) {
-                            Double packetL = parseVolumeLFromText(r.getProductName());
-                            if (packetL == null) packetL = parseVolumeLFromText(r.getProductSku());
-                            if (packetL == null) return false;
-                            return r.getTotalQty() >= (int) Math.ceil(requestedAmountInL / packetL);
-                        }
-
-                        if (requestedAmountInKg <= 0 && isWeightUnit(productUnit)) {
-                            Double packetKg = parseWeightKgFromText(r.getProductName());
-                            if (packetKg == null) packetKg = parseWeightKgFromText(r.getProductSku());
-                            if (packetKg == null) return false;
-                            return productQtyToKg(r.getTotalQty(), productUnit) >= (requestedQty * packetKg);
-                        }
-
-                        if (requestedAmountInL <= 0 && isVolumeUnit(productUnit)) {
-                            Double packetL = parseVolumeLFromText(r.getProductName());
-                            if (packetL == null) packetL = parseVolumeLFromText(r.getProductSku());
-                            if (packetL == null) return false;
-                            return productQtyToL(r.getTotalQty(), productUnit) >= (requestedQty * packetL);
-                        }
-
-                        return false;
-                    })
-                    .collect(Collectors.toList());
+            if (hasAmbiguity) {
+                Map<String, Object> body = new HashMap<>();
+                body.put("multiBrand", false);
+                body.put("needsPackagingClarification", true);
+                body.put("prompt", "Do you want loose or packet?");
+                body.put("candidates", filtered.stream().map(HelperUtilities::buildCandidateMap).collect(Collectors.toList()));
+                return ResponseEntity.ok(body);
+            }
         }
+        // ====================================================================
 
         // Step 4: Routing single output vs fallbacks
         if (filtered.size() == 1) {
             InventorySummaryResponse r = filtered.get(0);
+            Map<String, Object> candidateMap = HelperUtilities.buildCandidateMap(r);
+            
+            int checkoutQty = HelperUtilities.calculateRequiredQty(r, requestedUnit, requestedQty);
+
             Map<String, Object> body = new HashMap<>();
             body.put("requestedQty", requestedQty);
             body.put("requestedUnit", requestedUnit);
             body.put("multiBrand", false);
-            body.put("candidate", buildCandidateMap(r));
-            body.put("availability", computeAvailability(r, requestedQty, requestedUnit));
+            body.put("checkoutQty", checkoutQty); 
+            
+            Map<String, Object> mutableCandidate = new HashMap<>(candidateMap);
+            mutableCandidate.put("targetCartQty", checkoutQty);
+            body.put("candidate", mutableCandidate);
+            
             return ResponseEntity.ok(body);
         }
 
@@ -214,9 +199,9 @@ public class InventoryController {
             
             if (brands.size() <= 1) {
                 return ResponseEntity.ok(Map.of("multiBrand", false, "candidates", 
-                    resultList.stream().map(this::buildCandidateMap).collect(Collectors.toList())));
+                    resultList.stream().map(HelperUtilities::buildCandidateMap).collect(Collectors.toList())));
             }
-            return buildMultiBrandResponse(brands, resultList, requestedQty, requestedUnit);
+            return HelperUtilities.buildMultiBrandResponse(brands, resultList, requestedQty, requestedUnit);
         }
 
         if (filtered.size() > 1) {
@@ -225,209 +210,9 @@ public class InventoryController {
                     .filter(b -> b != null && !b.isEmpty())
                     .distinct()
                     .collect(Collectors.toList());
-            return buildMultiBrandResponse(brands, filtered, requestedQty, requestedUnit);
+            return HelperUtilities.buildMultiBrandResponse(brands, filtered, requestedQty, requestedUnit);
         }
 
         return ResponseEntity.ok(filtered);
     }
-
-    /* ================= Helper Utilities ================= */
-
-    private Map<String, Object> buildCandidateMap(InventorySummaryResponse r) {
-        return Map.of(
-            "productId", r.getProductId(),
-            "productSku", r.getProductSku(),
-            "productName", r.getProductName(),
-            "brand", r.getBrandName() != null ? r.getBrandName() : "",
-            "unit", r.getUnit() != null ? r.getUnit() : "",
-            "totalQty", r.getTotalQty() != null ? r.getTotalQty() : 0,
-            "price", r.getPrice() != null ? r.getPrice() : 0.0,
-            "discountAmount", r.getDiscountAmount() != null ? r.getDiscountAmount() : 0.0
-        );
     }
-
-    private ResponseEntity<Map<String, Object>> buildMultiBrandResponse(List<String> brands, List<InventorySummaryResponse> candidates, int qty, String unit) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("prompt", buildBrandPrompt(brands));
-        body.put("options", brands);
-        body.put("multiBrand", true);
-        body.put("quantityIgnored", true);
-        body.put("requestedQty", qty);
-        body.put("requestedUnit", unit);
-        body.put("candidates", candidates.stream().map(this::buildCandidateMap).collect(Collectors.toList()));
-        return ResponseEntity.ok(body);
-    }
-
-    private String buildBrandPrompt(List<String> brands) {
-        if (brands == null || brands.isEmpty()) {
-            return "Multiple products found. Which brand do you want?";
-        }
-        StringBuilder sb = new StringBuilder("Multiple brands found: ");
-        for (int i = 0; i < brands.size(); i++) {
-            sb.append(i + 1).append(". ").append(brands.get(i));
-            if (i < brands.size() - 1) sb.append(", ");
-        }
-        sb.append(". Which brand do you want?");
-        return sb.toString();
-    }
-
-    private double toKg(int qty, String unit) {
-        if (unit == null) return -1;
-        unit = unit.trim().toLowerCase();
-        if (unit.equals("kg") || unit.equals("kilogram") || unit.equals("kilograms")) return qty;
-        if (unit.equals("g") || unit.equals("gram") || unit.equals("grams") || unit.equals("gm")) return qty / 1000.0;
-        return -1;
-    }
-
-    private boolean isWeightUnit(String unit) {
-        if (unit == null) return false;
-        unit = unit.trim().toLowerCase();
-        return unit.equals("kg") || unit.equals("kilogram") || unit.equals("kilograms") || unit.equals("g") || unit.equals("gram") || unit.equals("grams") || unit.equals("gm");
-    }
-
-    private Double parseWeightKgFromText(String text) {
-        if (text == null) return null;
-        Matcher m = WEIGHT_PATTERN.matcher(text);
-        if (m.find()) {
-            try {
-                double val = Double.parseDouble(m.group(1));
-                String u = m.group(2).toLowerCase();
-                return (u.equals("g") || u.equals("gm") || u.equals("gram") || u.equals("grams")) ? val / 1000.0 : val;
-            } catch (Exception e) { return null; }
-        }
-        return null;
-    }
-
-    private Double parseVolumeLFromText(String text) {
-        if (text == null) return null;
-        Matcher m = VOLUME_PATTERN.matcher(text);
-        if (m.find()) {
-            try {
-                double val = Double.parseDouble(m.group(1));
-                String u = m.group(2).toLowerCase();
-                return (u.equals("ml") || u.equals("millilitre") || u.equals("milliliter")) ? val / 1000.0 : val;
-            } catch (Exception e) { return null; }
-        }
-        return null;
-    }
-
-    private double productQtyToKg(Integer qty, String productUnit) {
-        if (qty == null || productUnit == null) return -1;
-        String u = productUnit.trim().toLowerCase();
-        if (isWeightUnit(u)) {
-            return (u.equals("g") || u.equals("gm") || u.equals("gram") || u.equals("grams")) ? qty / 1000.0 : qty;
-        }
-        return -1;
-    }
-
-    private double productQtyToL(Integer qty, String productUnit) {
-        if (qty == null || productUnit == null) return -1;
-        String u = productUnit.trim().toLowerCase();
-        if (isVolumeUnit(u)) {
-            return (u.equals("ml") || u.equals("millilitre") || u.equals("milliliter")) ? qty / 1000.0 : qty;
-        }
-        return -1;
-    }
-
-    private double toLitre(int qty, String unit) {
-        if (unit == null) return -1;
-        unit = unit.trim().toLowerCase();
-        if (unit.equals("l") || unit.equals("litre") || unit.equals("liter") || unit.equals("litres") || unit.equals("liters")) return qty;
-        if (unit.equals("ml") || unit.equals("millilitre") || unit.equals("milliliter")) return qty / 1000.0;
-        return -1;
-    }
-
-    private boolean isVolumeUnit(String unit) {
-        if (unit == null) return false;
-        unit = unit.trim().toLowerCase();
-        return unit.equals("l") || unit.equals("litre") || unit.equals("liter") || unit.equals("litres") || unit.equals("liters") || unit.equals("ml") || unit.equals("millilitre") || unit.equals("milliliter");
-    }
-
-    private Map<String, Object> computeAvailability(InventorySummaryResponse r, int requestedQty, String requestedUnit) {
-        Map<String, Object> out = new HashMap<>();
-        out.put("productUnit", r.getUnit());
-        out.put("productTotalQty", r.getTotalQty());
-
-        String reqUnit = requestedUnit != null ? requestedUnit.trim().toLowerCase() : null;
-        double requestedKg = reqUnit != null ? toKg(requestedQty, reqUnit) : -1;
-        double requestedL = reqUnit != null ? toLitre(requestedQty, reqUnit) : -1;
-
-        if (requestedKg > 0) {
-            if (isWeightUnit(r.getUnit())) {
-                out.put("availableInRequestedUnit", r.getTotalQty());
-                out.put("availableUnit", "kg");
-            } else {
-                Double packetKg = parseWeightKgFromText(r.getProductName()) != null ? parseWeightKgFromText(r.getProductName()) : parseWeightKgFromText(r.getProductSku());
-                if (packetKg != null) {
-                    double availableKg = packetKg * (r.getTotalQty() != null ? r.getTotalQty() : 0);
-                    out.put("availableInRequestedUnit", availableKg);
-                    out.put("availableUnit", "kg");
-                    out.put("availablePackets", (int) Math.floor(availableKg / packetKg));
-                } else {
-                    out.put("availableInRequestedUnit", null);
-                    out.put("availableUnit", "unknown");
-                }
-            }
-            return out;
-        }
-
-        if (requestedL > 0) {
-            if (isVolumeUnit(r.getUnit())) {
-                out.put("availableInRequestedUnit", r.getTotalQty());
-                out.put("availableUnit", "l");
-            } else {
-                Double packetL = parseVolumeLFromText(r.getProductName()) != null ? parseVolumeLFromText(r.getProductName()) : parseVolumeLFromText(r.getProductSku());
-                if (packetL != null) {
-                    double availableL = packetL * (r.getTotalQty() != null ? r.getTotalQty() : 0);
-                    out.put("availableInRequestedUnit", availableL);
-                    out.put("availableUnit", "l");
-                    out.put("availablePackets", (int) Math.floor(availableL / packetL));
-                } else {
-                    out.put("availableInRequestedUnit", null);
-                    out.put("availableUnit", "unknown");
-                }
-            }
-            return out;
-        }
-
-        if (!isWeightUnit(reqUnit) && !isVolumeUnit(reqUnit)) {
-            if (r.getUnit() != null && r.getUnit().trim().equalsIgnoreCase(reqUnit)) {
-                out.put("availableInRequestedUnit", r.getTotalQty());
-                out.put("availableUnit", r.getUnit());
-            } else if (isWeightUnit(r.getUnit())) {
-                Double packetKg = parseWeightKgFromText(r.getProductName()) != null ? parseWeightKgFromText(r.getProductName()) : parseWeightKgFromText(r.getProductSku());
-                double availableKg = productQtyToKg(r.getTotalQty(), r.getUnit());
-                if (packetKg != null && availableKg >= 0) {
-                    out.put("availablePackets", (int) Math.floor(availableKg / packetKg));
-                    out.put("availableInRequestedUnit", Math.floor(availableKg / packetKg));
-                    out.put("availableUnit", "packets");
-                } else {
-                    out.put("availableInRequestedUnit", null);
-                    out.put("availableUnit", "unknown");
-                }
-            } else if (isVolumeUnit(r.getUnit())) {
-                Double packetL = parseVolumeLFromText(r.getProductName()) != null ? parseVolumeLFromText(r.getProductName()) : parseVolumeLFromText(r.getProductSku());
-                double availableL = productQtyToL(r.getTotalQty(), r.getUnit());
-                if (packetL != null && availableL >= 0) {
-                    out.put("availablePackets", (int) Math.floor(availableL / packetL));
-                    out.put("availableInRequestedUnit", Math.floor(availableL / packetL));
-                    out.put("availableUnit", "packets");
-                } else {
-                    out.put("availableInRequestedUnit", null);
-                    out.put("availableUnit", "unknown");
-                }
-            } else {
-                out.put("availableInRequestedUnit", r.getTotalQty());
-                out.put("availableUnit", r.getUnit());
-            }
-            return out;
-        }
-
-        out.put("availableInRequestedUnit", r.getTotalQty());
-        out.put("availableUnit", r.getUnit());
-        return out;
-    }
-
-    /* ================= Standard Handlers ================= */
-
-}

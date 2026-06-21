@@ -13,7 +13,7 @@ public final class HelperUtilities {
      * Compute exactly how many items or packets are required.
      * Precision tolerance logic prevents rounding discrepancies on exact measurements.
      */
-    public static int calculateRequiredQty(InventorySummaryResponse r, String requestedUnit, int requestedQty) {
+    public static int calculateRequiredQty(InventorySummaryResponse r, String requestedUnit, int requestedQty) throws RuntimeException {
     int targetCartQty = 0;
 
     // Fast-fail for invalid inputs or null response object
@@ -49,6 +49,8 @@ public final class HelperUtilities {
                 targetCartQty = (int) Math.ceil(requestedQty / packetSize);
             } else if ("kg".equals(voiceUnit) && "kg".equals(packetUnit) && requestedQty % packetSize == 0) { 
                     targetCartQty = (int) (requestedQty / packetSize);  
+            }else{
+                throw new RuntimeException("Quantity mismatch: You requested " + requestedQty + " " + voiceUnit + ", but the packet size is " + packetSize + " " + packetUnit );
             }
         } // Fixed missing closing brace
 
@@ -62,7 +64,9 @@ public final class HelperUtilities {
                 targetCartQty = (int) Math.ceil(requestedQty / packetSize);
             } else if ("l".equals(voiceUnit) && "l".equals(packetUnit) && requestedQty % packetSize == 0) {
                 targetCartQty = (int) Math.ceil(requestedQty / packetSize);
-            }  
+            } else{
+                throw new RuntimeException("Quantity mismatch: You requested " + requestedQty + " " + voiceUnit + ", but the packet size is " + packetSize + " " + packetUnit);
+            } 
         }
     } // Fixed missing closing brace
     

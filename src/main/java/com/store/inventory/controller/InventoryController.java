@@ -107,13 +107,20 @@ public class InventoryController {
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid voice command", "details", e.getMessage()));
         }
 
-        return processVoiceSearch(command, language);
+        try {
+            return processVoiceSearch(command, language);
+        } catch (RuntimeException e) {
+            return ResponseEntity.ok().body(Map.of("error", e.getMessage()));
+        }
+
+
+       
     }
 
     /**
      * Dedicated strategy method handling multi-brand and single-brand voice orchestration
      */
-    private ResponseEntity<?> processVoiceSearch(VoiceCommand command, String language) {
+    private ResponseEntity<?> processVoiceSearch(VoiceCommand command, String language) throws RuntimeException {
         int requestedQty = command.getQty() != null ? command.getQty() : 0;
         String requestedUnit = command.getUnit();
 

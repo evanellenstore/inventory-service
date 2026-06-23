@@ -1,10 +1,13 @@
 package com.store.inventory.utilty;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
 import org.springframework.http.ResponseEntity;
+
 import com.store.inventory.dto.InventorySummaryResponse;
 
 public final class HelperUtilities {
@@ -13,8 +16,9 @@ public final class HelperUtilities {
      * Compute exactly how many items or packets are required.
      * Precision tolerance logic prevents rounding discrepancies on exact measurements.
      */
-    public static int calculateRequiredQty(InventorySummaryResponse r, String requestedUnit, int requestedQty) throws RuntimeException {
+    public static int calculateRequiredQty(InventorySummaryResponse r, String requestedUnit, int requestedQty,Boolean requestedIsLoose) throws RuntimeException {
     int targetCartQty = 0;
+
 
     // Fast-fail for invalid inputs or null response object
     if (r == null || requestedUnit == null || requestedUnit.isEmpty() || requestedQty <= 0) {
@@ -76,10 +80,9 @@ public final class HelperUtilities {
     /**
      * Filters the result list based on row characteristics
      */
-    public static List<InventorySummaryResponse> filterInventoryByUnit(
-            List<InventorySummaryResponse> resultList, 
-            String requestedUnit, 
-            int requestedQty) {
+
+    /* 
+    public static List<InventorySummaryResponse> filterInventoryByUnit(List<InventorySummaryResponse> resultList,  String requestedUnit, int requestedQty, Boolean requestedIsLoose) {
         
         if (requestedUnit == null || requestedUnit.isEmpty() || requestedQty <= 0) {
             return resultList;
@@ -91,9 +94,13 @@ public final class HelperUtilities {
                 .filter(r -> {
                     if (r.getTotalQty() == null) return false;
 
+                    //db loose flag
                     boolean itemIsLoose = r.isLoose() == Boolean.TRUE;
 
-                    if (itemIsLoose) {
+                    if(requestedIsLoose != null && requestedIsLoose && itemIsLoose) { return false;}
+
+                        
+                    if (itemIsLoose && requestedIsLoose != null && requestedIsLoose) {
                         String productUnit = r.getUnit() != null ? r.getUnit().trim().toLowerCase() : "";
                         Double productSize = r.getProductSize() != null ? r.getProductSize() : 1.0;
                         
@@ -113,17 +120,176 @@ public final class HelperUtilities {
                             return totalAvailableL >= requestedAmountInL;
                         }
                     } 
-                    else {
-                        int requiredPackets = calculateRequiredQty(r, requestedUnit, requestedQty);
+                    else if(requestedIsLoose == null || !requestedIsLoose){
+                        int requiredPackets = calculateRequiredQty(r, requestedUnit, requestedQty,requestedIsLoose);
                         if (requiredPackets <= 0) return false; 
-                        
                         return r.getTotalQty() >= requiredPackets;
                     }
 
                     return false;
                 })
                 .collect(Collectors.toList());
-    }
+    }*/
+
+            
+
+
+    public static List<InventorySummaryResponse> filterInventoryByUnit(
+            List<InventorySummaryResponse> resultList, String requestedUnit, int requestedQty,
+            Boolean requestedIsLoose) {
+
+        // Fail-fast checks
+        if (resultList == null || resultList.isEmpty()) {
+            return new ArrayList<InventorySummaryResponse>(0);
+        }
+
+        List<InventorySummaryResponse> filteredList = null;
+
+        // If requestedIsLoose is null mean first time call
+        if (requestedIsLoose == null) {
+
+            if (requestedUnit == null || requestedUnit.isEmpty() || requestedQty <= 0) {
+                return resultList;
+            }
+
+            final String voiceUnit = requestedUnit.trim().toLowerCase();
+
+            filteredList = new ArrayList<InventorySummaryResponse>();
+
+            for (InventorySummaryResponse r : resultList) {
+                if (r == null || r.getTotalQty() == null) {
+                    continue;
+                }
+
+                // Database packaging state
+                boolean itemIsLoose = (r.isLoose() == Boolean.TRUE);
+
+                // Case 1: Evaluate Loose Items
+                // (Triggers if explicitly requested loose OR if requestedIsLoose is null)
+                if (itemIsLoose) {
+                    String productUnit = r.getUnit() != null ? r.getUnit().trim().toLowerCase() : "";
+                    Double productSize = r.getProductSize() != null ? r.getProductSize() : 1.0;
+
+                    // Direct Unit Match
+                    if (!productUnit.isEmpty() && productUnit.equalsIgnoreCase(voiceUnit)) {
+                        if (r.getTotalQty() >= requestedQty) {
+                            filteredList.add(r);
+                        }
+                        continue;
+                    }
+
+                    // Weight Unit Conversion Match
+                    if (isWeightUnit(voiceUnit) && isWeightUnit(productUnit)) {
+                        double totalAvailableKg = r.getTotalQty() * productSize * toKg(1, productUnit);
+                        double requestedAmountInKg = toKg(requestedQty, voiceUnit);
+                        if (totalAvailableKg >= requestedAmountInKg) {
+                            filteredList.add(r);
+                        }
+                        continue;
+                    }
+
+                    // Volume Unit Conversion Match
+                    if (isVolumeUnit(voiceUnit) && isVolumeUnit(productUnit)) {
+                        double totalAvailableL = r.getTotalQty() * productSize * toLitre(1, productUnit);
+                        double requestedAmountInL = toLitre(requestedQty, voiceUnit);
+                        if (totalAvailableL >= requestedAmountInL) {
+                            filteredList.add(r);
+                        }
+                        continue;
+                    }
+                }
+
+                // Case 2: Evaluate Packaged/Packet Items
+                // (Triggers if explicitly requested packets OR if requestedIsLoose is null)
+
+                int requiredPackets = calculateRequiredQty(r, requestedUnit, requestedQty, requestedIsLoose);
+                if (requiredPackets > 0 && r.getTotalQty() >= requiredPackets) {
+                    filteredList.add(r);
+
+                }
+            }
+
+        } else /// If requestedIsLoose is true or false mean second time call
+        {
+
+            if (requestedUnit == null || requestedUnit.isEmpty() || requestedQty <= 0) {
+                return resultList;
+            }
+
+            final String voiceUnit = requestedUnit.trim().toLowerCase();
+
+            filteredList = new ArrayList<InventorySummaryResponse>();
+
+            for (InventorySummaryResponse r : resultList) {
+                if (r == null || r.getTotalQty() == null) {
+                    continue;
+                }
+
+                // Database packaging state
+                boolean itemIsLoose = (r.isLoose() == Boolean.TRUE);
+                boolean requestedIsLooseValue = requestedIsLoose == Boolean.TRUE ? true : false;
+
+                // Case 1: Evaluate Loose Items
+                // (Triggers if explicitly requested loose OR if requestedIsLoose is null)
+                if (itemIsLoose && requestedIsLooseValue) {
+                    String productUnit = r.getUnit() != null ? r.getUnit().trim().toLowerCase() : "";
+                    Double productSize = r.getProductSize() != null ? r.getProductSize() : 1.0;
+
+                    // Direct Unit Match
+                    if (!productUnit.isEmpty() && productUnit.equalsIgnoreCase(voiceUnit)) {
+                        if (r.getTotalQty() >= requestedQty) {
+                            filteredList.add(r);
+                            break;
+                        }
+                        continue;
+                    }
+
+                    // Weight Unit Conversion Match
+                    if (isWeightUnit(voiceUnit) && isWeightUnit(productUnit)) {
+                        double totalAvailableKg = r.getTotalQty() * productSize * toKg(1, productUnit);
+                        double requestedAmountInKg = toKg(requestedQty, voiceUnit);
+                        if (totalAvailableKg >= requestedAmountInKg) {
+                            filteredList.add(r);
+                            break;
+                        }
+                        continue;
+                    }
+
+                    // Volume Unit Conversion Match
+                    if (isVolumeUnit(voiceUnit) && isVolumeUnit(productUnit)) {
+                        double totalAvailableL = r.getTotalQty() * productSize * toLitre(1, productUnit);
+                        double requestedAmountInL = toLitre(requestedQty, voiceUnit);
+                        if (totalAvailableL >= requestedAmountInL) {
+                            filteredList.add(r);
+                            break;
+                        }
+                        continue;
+                    }
+                } else if (!itemIsLoose && !requestedIsLooseValue) {
+                    // Case 2: Evaluate Packaged/Packet Items
+                    // (Triggers if explicitly requested packets OR if requestedIsLoose is null)
+
+                    int requiredPackets = calculateRequiredQty(r, requestedUnit, requestedQty, requestedIsLoose);
+                    if (requiredPackets > 0 && r.getTotalQty() >= requiredPackets) {
+                        filteredList.add(r);
+                        break;
+
+                    }
+
+                }
+
+            }
+
+        }
+
+        return filteredList;
+    }          
+
+
+
+
+   
+
 
     public static Map<String, Object> buildCandidateMap(InventorySummaryResponse r) {
         String productName = r.getProductName() != null ? r.getProductName().toLowerCase() : "";

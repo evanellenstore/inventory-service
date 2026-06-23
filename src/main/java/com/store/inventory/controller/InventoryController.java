@@ -1,6 +1,5 @@
 package com.store.inventory.controller;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,7 +20,6 @@ import com.store.inventory.dto.AdjustRequest;
 import com.store.inventory.dto.InventorySummaryResponse;
 import com.store.inventory.dto.ReserveRequest;
 import com.store.inventory.dto.ReservedItemResponse;
-import com.store.inventory.dto.VoiceCommand;
 import com.store.inventory.entity.InventoryStock;
 import com.store.inventory.service.InventoryService;
 import com.store.inventory.utilty.HelperUtilities;
@@ -97,18 +95,15 @@ public class InventoryController {
 
    @PostMapping("/search")
     public ResponseEntity<?> searchByName(@RequestBody Map<String, String> request) {
-        String language = request.get("language");
-        String textJson = request.get("text");
+       
+
+
+       // {productName: "Atta", qty: 5, unit: "kg", language: "en", isLoose: null}
         
-        VoiceCommand command;
-        try {
-            command = objectMapper.readValue(textJson, VoiceCommand.class);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Invalid voice command", "details", e.getMessage()));
-        }
+      
 
         try {
-            return processVoiceSearch(command, language);
+            return processVoiceSearch(request);
         } catch (RuntimeException e) {
             return ResponseEntity.ok().body(Map.of("error", e.getMessage()));
         }
@@ -120,14 +115,18 @@ public class InventoryController {
     /**
      * Dedicated strategy method handling multi-brand and single-brand voice orchestration
      */
-    private ResponseEntity<?> processVoiceSearch(VoiceCommand command, String language) throws RuntimeException {
-        int requestedQty = command.getQty() != null ? command.getQty() : 0;
-        String requestedUnit = command.getUnit();
+    private ResponseEntity<?> processVoiceSearch(Map<String, String> request) throws RuntimeException {
+        int requestedQty = request.get("qty") != null ? Integer.parseInt(request.get("qty")) : 0;
+        String requestedUnit = request.get("unit");
+        Boolean requestedIsLoose = request.get("isLoose") != null ? Boolean.parseBoolean(request.get("isLoose")) : null;
+        String language = request.get("language") != null ? request.get("language") : "en";
+        String productName = request.get("productName");
 
-        List<InventorySummaryResponse> resultList = inventoryService.searchByProductName(command.getProductName(), language);
+
+        List<InventorySummaryResponse> resultList = inventoryService.searchByProductName(productName, language);
        
         // Step 1: Explicit brand server-side filtering
-        String explicitBrand = command.getBrand();
+        String explicitBrand = request.get("brand");
         if (explicitBrand != null && !explicitBrand.trim().isEmpty()) {
             String brandLc = explicitBrand.trim().toLowerCase();
             resultList = resultList.stream()
@@ -140,18 +139,15 @@ public class InventoryController {
         }
 
         // Step 2: Multi-brand Evaluation
-        List<String> rawBrands = resultList.stream()
-            .map(InventorySummaryResponse::getBrandName)
-            .filter(b -> b != null && !b.isEmpty())
-            .distinct()
-            .collect(Collectors.toList());     
+        List<String> rawBrands = resultList.stream().map(InventorySummaryResponse::getBrandName).filter(b -> b != null && !b.isEmpty())
+            .distinct().collect(Collectors.toList());     
             
         if (rawBrands.size() > 1) {
             return HelperUtilities.buildMultiBrandResponse(rawBrands, resultList, requestedQty, requestedUnit);
         }
 
         // Step 3: Run structural unit matching measurements filter
-        List<InventorySummaryResponse> filtered = HelperUtilities.filterInventoryByUnit(resultList, requestedUnit, requestedQty);
+        List<InventorySummaryResponse> filtered = HelperUtilities.filterInventoryByUnit(resultList, requestedUnit, requestedQty, requestedIsLoose);
 
         // ================= CLEAN MIXED-PACKAGING ROW CHECK =================
         if (filtered.size() > 1) {
@@ -182,7 +178,7 @@ public class InventoryController {
             InventorySummaryResponse r = filtered.get(0);
             Map<String, Object> candidateMap = HelperUtilities.buildCandidateMap(r);
             
-            int checkoutQty = HelperUtilities.calculateRequiredQty(r, requestedUnit, requestedQty);
+            int checkoutQty = HelperUtilities.calculateRequiredQty(r, requestedUnit, requestedQty, requestedIsLoose);
 
             Map<String, Object> body = new HashMap<>();
             body.put("requestedQty", requestedQty);

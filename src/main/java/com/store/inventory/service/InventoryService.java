@@ -28,7 +28,8 @@ import com.store.inventory.repository.InventoryStockRepository;
 import com.store.inventory.repository.InventoryTransactionRepository;
 
 import lombok.RequiredArgsConstructor;
-
+import lombok.extern.slf4j.Slf4j;
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class InventoryService {
@@ -47,6 +48,9 @@ public class InventoryService {
     public InventorySummaryResponse getInventory(Long productId) {
 
         List<InventoryStock> stocks = stockRepo.getByProductId(productId);
+        if (stocks.isEmpty() || stocks.size() == 0) {
+            throw new InventoryException("Inventory not found for product ID: " + productId);
+        }
         return toSummaryResponse(stocks, productId);
     }
 
@@ -576,15 +580,11 @@ public class InventoryService {
 
         List<InventorySummaryResponse> result = new ArrayList<>();
         for (ProductResponse p : products) {
-            try {
-                result.add(getInventory(p.getId()));
+            try { 
+                InventorySummaryResponse inventorySummaryResponse=getInventory(p.getId());
+                result.add(inventorySummaryResponse);
             } catch (Exception e) {
-                // If inventory missing for a product, still include empty summary
-                try {
-                    result.add(toSummaryResponse(new ArrayList<>(), p.getId()));
-                } catch (Exception ex) {
-                    // ignore
-                }
+                log.info("Warning: failed to get inventory for product ID " + p.getId() + ": " + e.getMessage());  
             }
         }
 

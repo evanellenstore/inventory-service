@@ -16,7 +16,8 @@ public interface InventoryStockRepository
     
     Optional<InventoryStock> findByProductIdAndBatchNo(Long productId, String batchNo);
 
-    @Query("SELECT s FROM InventoryStock s WHERE s.productId = ?1")
+   // @Query("SELECT s FROM InventoryStock s WHERE s.productId = ?1")
+    @Query("SELECT s FROM InventoryStock s WHERE s.productId = ?1 AND s.availableQty > 0")
     List<InventoryStock> getByProductId(Long productId);
 
     Optional<InventoryStock> findByProductIdAndExpiryDate(Long productId, LocalDate expiryDate);

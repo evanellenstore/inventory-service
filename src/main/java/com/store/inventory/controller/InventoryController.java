@@ -150,17 +150,26 @@ public class InventoryController {
         List<InventorySummaryResponse> filtered = HelperUtilities.filterInventoryByUnit(resultList, requestedUnit, requestedQty, requestedIsLoose);
 
         // ================= CLEAN MIXED-PACKAGING ROW CHECK =================
+        
         if (filtered.size() > 1) {
+             boolean hasAmbiguity = false;
+            boolean looseCkeck = filtered.stream().anyMatch(r -> r.isLoose() == Boolean.TRUE);
+            boolean packetCheck = filtered.stream().anyMatch(r -> r.isLoose() == Boolean.FALSE);
+
+             if(looseCkeck && packetCheck) {
+                hasAmbiguity= true;
+             }
+           
+           /* 
             boolean firstIsLoose = filtered.get(0).isLoose() == Boolean.TRUE; 
             boolean hasAmbiguity = false;
-
             for (int i = 1; i < filtered.size(); i++) {
                 boolean currentIsLoose = filtered.get(i).isLoose() == Boolean.TRUE;
                 if (currentIsLoose != firstIsLoose) {
                     hasAmbiguity = true;
                     break;
                 }
-            }
+            }*/
 
             if (hasAmbiguity) {
                 Map<String, Object> body = new HashMap<>();

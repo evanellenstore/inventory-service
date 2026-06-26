@@ -93,40 +93,38 @@ public class InventoryController {
 
 
 
-   @PostMapping("/search")
-    public ResponseEntity<?> searchByName(@RequestBody Map<String, String> request) {
-       
-
-
-       // {productName: "Atta", qty: 5, unit: "kg", language: "en", isLoose: null}
-        
-      
-
+@PostMapping("/search")
+    public ResponseEntity<?> searchByName(@RequestBody Map<String, Object> request) {
         try {
             return processVoiceSearch(request);
         } catch (RuntimeException e) {
             return ResponseEntity.ok().body(Map.of("error", e.getMessage()));
         }
-
-
-       
     }
 
     /**
-     * Dedicated strategy method handling multi-brand and single-brand voice orchestration
+     * Dedicated strategy method handling multi-brand, packaging validation, and cart calculations.
      */
-    private ResponseEntity<?> processVoiceSearch(Map<String, String> request) throws RuntimeException {
-        int requestedQty = request.get("qty") != null ? Integer.parseInt(request.get("qty")) : 0;
-        String requestedUnit = request.get("unit");
-        Boolean requestedIsLoose = request.get("isLoose") != null ? Boolean.parseBoolean(request.get("isLoose")) : null;
-        String language = request.get("language") != null ? request.get("language") : "en";
-        String productName = request.get("productName");
+    private ResponseEntity<?> processVoiceSearch(Map<String, Object> request) throws RuntimeException {
+        int requestedQty = request.get("qty") != null ? Integer.parseInt(request.get("qty").toString()) : 0;
+        String requestedUnit = request.get("unit") != null ? request.get("unit").toString() : null;
+        String language = request.get("language") != null ? request.get("language").toString() : "en";
+        String productName = request.get("productName") != null ? request.get("productName").toString() : "";
+        String explicitBrand = request.get("brand") != null ? request.get("brand").toString() : null;
 
+        // Safely extract and check for literal null strings or true null references
+        Boolean requestedIsLoose = null;
+        if (request.get("isLoose") != null) {
+            String isLooseStr = request.get("isLoose").toString().trim();
+            if (!isLooseStr.equalsIgnoreCase("null") && !isLooseStr.isEmpty()) {
+                requestedIsLoose = Boolean.parseBoolean(isLooseStr);
+            }
+        }
 
+        // Fetch initial dataset by product name (Turn 1 baseline data)
         List<InventorySummaryResponse> resultList = inventoryService.searchByProductName(productName, language);
        
-        // Step 1: Explicit brand server-side filtering
-        String explicitBrand = request.get("brand");
+        // STEP 1: Handle Brand Filters (Second & Third Time Searches)
         if (explicitBrand != null && !explicitBrand.trim().isEmpty()) {
             String brandLc = explicitBrand.trim().toLowerCase();
             resultList = resultList.stream()
@@ -138,55 +136,41 @@ public class InventoryController {
             return ResponseEntity.ok(List.of());
         }
 
-        // Step 2: Multi-brand Evaluation
-        List<String> rawBrands = resultList.stream().map(InventorySummaryResponse::getBrandName).filter(b -> b != null && !b.isEmpty())
-            .distinct().collect(Collectors.toList());     
+        // STEP 2: Multi-brand Evaluation (Triggers on Turn 1 if multiple brands exist)
+        List<String> rawBrands = resultList.stream()
+            .map(InventorySummaryResponse::getBrandName)
+            .filter(b -> b != null && !b.isEmpty())
+            .distinct()
+            .collect(Collectors.toList());     
             
-        if (rawBrands.size() > 1) {
+        if (rawBrands.size() > 1 && (explicitBrand == null || explicitBrand.trim().isEmpty())) {
             return HelperUtilities.buildMultiBrandResponse(rawBrands, resultList, requestedQty, requestedUnit);
         }
 
-        // Step 3: Run structural unit matching measurements filter
-        List<InventorySummaryResponse> filtered = HelperUtilities.filterInventoryByUnit(resultList, requestedUnit, requestedQty, requestedIsLoose);
+        // STEP 3: Mixed Packaging Ambiguity Check (Triggers on Turn 2 if brand is selected but packaging isn't)
+        if (requestedIsLoose == null) {
+            boolean containsLoose = resultList.stream().anyMatch(r -> Boolean.TRUE.equals(r.isLoose()));
+            boolean containsPacket = resultList.stream().anyMatch(r -> !Boolean.TRUE.equals(r.isLoose()));
 
-        // ================= CLEAN MIXED-PACKAGING ROW CHECK =================
-        
-        if (filtered.size() > 1) {
-             boolean hasAmbiguity = false;
-            boolean looseCkeck = filtered.stream().anyMatch(r -> r.isLoose() == Boolean.TRUE);
-            boolean packetCheck = filtered.stream().anyMatch(r -> r.isLoose() == Boolean.FALSE);
-
-             if(looseCkeck && packetCheck) {
-                hasAmbiguity= true;
-             }
-           
-           /* 
-            boolean firstIsLoose = filtered.get(0).isLoose() == Boolean.TRUE; 
-            boolean hasAmbiguity = false;
-            for (int i = 1; i < filtered.size(); i++) {
-                boolean currentIsLoose = filtered.get(i).isLoose() == Boolean.TRUE;
-                if (currentIsLoose != firstIsLoose) {
-                    hasAmbiguity = true;
-                    break;
-                }
-            }*/
-
-            if (hasAmbiguity) {
+            if (containsLoose && containsPacket) {
                 Map<String, Object> body = new HashMap<>();
                 body.put("multiBrand", false);
                 body.put("needsPackagingClarification", true);
                 body.put("prompt", "Do you want loose or packet?");
-                body.put("candidates", filtered.stream().map(HelperUtilities::buildCandidateMap).collect(Collectors.toList()));
+                body.put("candidates", resultList.stream().map(HelperUtilities::buildCandidateMap).collect(Collectors.toList()));
                 return ResponseEntity.ok(body);
             }
         }
-        // ====================================================================
 
-        // Step 4: Routing single output vs fallbacks
+        // STEP 4: Run Structural Unit Matching & Quantity Metric Sifting
+        List<InventorySummaryResponse> filtered = HelperUtilities.filterInventoryByUnit(resultList, requestedUnit, requestedQty, requestedIsLoose);
+
+        // STEP 5: Routing Single Output vs Multi-Item Fallbacks / Mismatch Additions
         if (filtered.size() == 1) {
             InventorySummaryResponse r = filtered.get(0);
             Map<String, Object> candidateMap = HelperUtilities.buildCandidateMap(r);
             
+            // This will execute safely on the isolated variant and throw standard mismatches if quantity checks fail
             int checkoutQty = HelperUtilities.calculateRequiredQty(r, requestedUnit, requestedQty, requestedIsLoose);
 
             Map<String, Object> body = new HashMap<>();
@@ -202,29 +186,16 @@ public class InventoryController {
             return ResponseEntity.ok(body);
         }
 
-        if (filtered.isEmpty() && resultList.size() > 1) {
-            List<String> brands = resultList.stream()
-                    .map(InventorySummaryResponse::getBrandName)
-                    .filter(b -> b != null && !b.isEmpty())
-                    .distinct()
-                    .collect(Collectors.toList());
-            
-            if (brands.size() <= 1) {
-                return ResponseEntity.ok(Map.of("multiBrand", false, "candidates", 
-                    resultList.stream().map(HelperUtilities::buildCandidateMap).collect(Collectors.toList())));
-            }
-            return HelperUtilities.buildMultiBrandResponse(brands, resultList, requestedQty, requestedUnit);
-        }
-
-        if (filtered.size() > 1) {
-            List<String> brands = filtered.stream()
-                    .map(InventorySummaryResponse::getBrandName)
-                    .filter(b -> b != null && !b.isEmpty())
-                    .distinct()
-                    .collect(Collectors.toList());
-            return HelperUtilities.buildMultiBrandResponse(brands, filtered, requestedQty, requestedUnit);
+        // Only fall back to complete listings if the user HAS NOT chosen a packaging path yet.
+        // If they chose "packet" (requestedIsLoose == false) and it's empty, do not fall back to loose.
+        if (filtered.isEmpty() && !resultList.isEmpty() && requestedIsLoose == null) {
+            return ResponseEntity.ok(Map.of(
+                "multiBrand", false, 
+                "candidates", resultList.stream().map(HelperUtilities::buildCandidateMap).collect(Collectors.toList())
+            ));
         }
 
         return ResponseEntity.ok(filtered);
     }
-    }
+
+}

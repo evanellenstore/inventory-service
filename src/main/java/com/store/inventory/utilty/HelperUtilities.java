@@ -7,43 +7,37 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.http.ResponseEntity;
-
 import com.store.inventory.dto.InventorySummaryResponse;
 
 public final class HelperUtilities {
 
+    private HelperUtilities() {
+        // Prevent instantiation of utility class
+    }
+
     /**
      * Calculates the required quantity of packets based on the requested unit, quantity, and packaging preference.
-     * This method handles both weight and volume unit conversions to ensure accurate calculations.
-     * It also performs validation checks to prevent division by zero and mismatched units.
-     * @param r
-     * @param requestedUnit
-     * @param requestedQty
-     * @param requestedIsLoose
-     * @return
-     * @throws RuntimeException
      */
     public static int calculateRequiredQty(InventorySummaryResponse r, String requestedUnit, int requestedQty,
             Boolean requestedIsLoose) throws RuntimeException {
 
         int targetCartQty = 0;
-        // Fast-fail for invalid inputs or null response object
         if (r == null || requestedUnit == null || requestedUnit.isEmpty() || requestedQty <= 0) {
             return requestedQty;
         }
 
         String voiceUnit = requestedUnit.trim().toLowerCase();
         boolean itemIsLoose = Boolean.TRUE.equals(r.isLoose());
+        
         if (itemIsLoose) {
             targetCartQty = 1;
         } else {
-            // Safe null/empty checks for packet fields
             String packetUnit = (r.getPacketUnit() != null) ? r.getPacketUnit().trim().toLowerCase() : "";
             Double packetSize = r.getPacketSize();
             if (packetSize == null || packetSize <= 0) {
-                return requestedQty; // Fallback to avoid division by zero
+                return requestedQty; 
             }
-            // Test packet scenario
+
             if (voiceUnit.contains("packet") || voiceUnit.contains("pck") || voiceUnit.contains("box")) {
                 return requestedQty;
             }
@@ -59,9 +53,10 @@ public final class HelperUtilities {
                 } else if ("kg".equals(voiceUnit) && "kg".equals(packetUnit) && requestedQty % packetSize == 0) {
                     targetCartQty = (int) (requestedQty / packetSize);
                 } else {
-                    throw new RuntimeException("Quantity mismatch: You requested " + requestedQty + " " + voiceUnit + ", but the packet size is " + packetSize + " " + packetUnit);
+                   throw new RuntimeException("Quantity mismatch: You requested " + requestedQty + " " + voiceUnit + ", but the packet size is " + packetSize + " " + packetUnit);
                 }
-            } // Fixed missing closing brace
+            } 
+            
             // Volume packet calculations
             if (isVolumeUnit(voiceUnit) && isVolumeUnit(packetUnit)) {
                 if ("l".equals(voiceUnit) && "ml".equals(packetUnit)) {
@@ -73,185 +68,97 @@ public final class HelperUtilities {
                 } else if ("l".equals(voiceUnit) && "l".equals(packetUnit) && requestedQty % packetSize == 0) {
                     targetCartQty = (int) Math.ceil(requestedQty / packetSize);
                 } else {
-                    throw new RuntimeException("Quantity mismatch: You requested " + requestedQty + " " + voiceUnit + ", but the packet size is " + packetSize + " " + packetUnit);
+                   throw new RuntimeException("Quantity mismatch: You requested " + requestedQty + " " + voiceUnit + ", but the packet size is " + packetSize + " " + packetUnit);
                 }
             }
-        } // Fixed missing closing brace
+        } 
         return targetCartQty;
-
     }
 
-
-      /**
-       * Filters the inventory list based on the requested unit, quantity, and packaging preference (loose or packaged).
-       * This method handles both the initial filtering and subsequent filtering based on user preferences.
-       * It performs unit conversions for weight and volume measurements to ensure accurate comparisons.
-       * @param resultList
-       * @param requestedUnit
-       * @param requestedQty
-       * @param requestedIsLoose
-       * @return
-       */   
-
+    /**
+     * Filters the inventory list handling full sequential constraints (Multi-turn compliant matching).
+     */
     public static List<InventorySummaryResponse> filterInventoryByUnit(
             List<InventorySummaryResponse> resultList, String requestedUnit, int requestedQty,
             Boolean requestedIsLoose) {
 
-        // Fail-fast checks
         if (resultList == null || resultList.isEmpty()) {
-            return new ArrayList<InventorySummaryResponse>(0);
+            return new ArrayList<>(0);
         }
 
-        List<InventorySummaryResponse> filteredList = null;
+        if (requestedUnit == null || requestedUnit.isEmpty() || requestedQty <= 0) {
+            return resultList;
+        }
 
-        // If requestedIsLoose is null mean first time call
-        if (requestedIsLoose == null) {
+        final String voiceUnit = requestedUnit.trim().toLowerCase();
+        List<InventorySummaryResponse> filteredList = new ArrayList<>();
 
-            if (requestedUnit == null || requestedUnit.isEmpty() || requestedQty <= 0) {
-                return resultList;
+        for (InventorySummaryResponse r : resultList) {
+            if (r == null || r.getTotalQty() == null) {
+                continue;
             }
 
-            final String voiceUnit = requestedUnit.trim().toLowerCase();
+            boolean itemIsLoose = Boolean.TRUE.equals(r.isLoose());
 
-            filteredList = new ArrayList<InventorySummaryResponse>();
+            // Strictly isolate by package type if specified by the user
+            if (requestedIsLoose != null) {
+                if (requestedIsLoose && !itemIsLoose) continue;
+                if (!requestedIsLoose && itemIsLoose) continue;
+            }
 
-            for (InventorySummaryResponse r : resultList) {
-                if (r == null || r.getTotalQty() == null) {
-                    continue;
-                }
-
-                // Database packaging state
-                boolean itemIsLoose = (r.isLoose() == Boolean.TRUE);
-
-                // Case 1: Evaluate Loose Items
-                // (Triggers if explicitly requested loose OR if requestedIsLoose is null)
-                if (itemIsLoose) {
-                    String productUnit = r.getUnit() != null ? r.getUnit().trim().toLowerCase() : "";
-                    Double productSize = r.getProductSize() != null ? r.getProductSize() : 1.0;
-
-                    // Direct Unit Match
-                    if (!productUnit.isEmpty() && productUnit.equalsIgnoreCase(voiceUnit)) {
-                        if (r.getTotalQty() >= requestedQty) {
-                            filteredList.add(r);
-                        }
-                        continue;
-                    }
-
-                    // Weight Unit Conversion Match
-                    if (isWeightUnit(voiceUnit) && isWeightUnit(productUnit)) {
-                        double totalAvailableKg = r.getTotalQty() * productSize * toKg(1, productUnit);
-                        double requestedAmountInKg = toKg(requestedQty, voiceUnit);
-                        if (totalAvailableKg >= requestedAmountInKg) {
-                            filteredList.add(r);
-                        }
-                        continue;
-                    }
-
-                    // Volume Unit Conversion Match
-                    if (isVolumeUnit(voiceUnit) && isVolumeUnit(productUnit)) {
-                        double totalAvailableL = r.getTotalQty() * productSize * toLitre(1, productUnit);
-                        double requestedAmountInL = toLitre(requestedQty, voiceUnit);
-                        if (totalAvailableL >= requestedAmountInL) {
-                            filteredList.add(r);
-                        }
-                        continue;
-                    }
-                }
-
-                // Case 2: Evaluate Packaged/Packet Items
-                // (Triggers if explicitly requested packets OR if requestedIsLoose is null)
-
-                int requiredPackets = calculateRequiredQty(r, requestedUnit, requestedQty, requestedIsLoose);
-                if (requiredPackets > 0 && r.getTotalQty() >= requiredPackets) {
+            if (itemIsLoose) {
+                if (matchesLooseCriteria(r, voiceUnit, requestedQty)) {
                     filteredList.add(r);
-
                 }
-            }
-
-        } else /// If requestedIsLoose is true or false mean second time call
-        {
-
-            if (requestedUnit == null || requestedUnit.isEmpty() || requestedQty <= 0) {
-                return resultList;
-            }
-
-            final String voiceUnit = requestedUnit.trim().toLowerCase();
-
-            filteredList = new ArrayList<InventorySummaryResponse>();
-
-            for (InventorySummaryResponse r : resultList) {
-                if (r == null || r.getTotalQty() == null) {
-                    continue;
-                }
-
-                // Database packaging state
-                boolean itemIsLoose = (r.isLoose() == Boolean.TRUE);
-                boolean requestedIsLooseValue = requestedIsLoose == Boolean.TRUE ? true : false;
-
-                // Case 1: Evaluate Loose Items
-                // (Triggers if explicitly requested loose OR if requestedIsLoose is null)
-                if (itemIsLoose && requestedIsLooseValue) {
-                    String productUnit = r.getUnit() != null ? r.getUnit().trim().toLowerCase() : "";
-                    Double productSize = r.getProductSize() != null ? r.getProductSize() : 1.0;
-
-                    // Direct Unit Match
-                    if (!productUnit.isEmpty() && productUnit.equalsIgnoreCase(voiceUnit)) {
-                        if (r.getTotalQty() >= requestedQty) {
-                            filteredList.add(r);
-                            break;
-                        }
-                        continue;
-                    }
-
-                    // Weight Unit Conversion Match
-                    if (isWeightUnit(voiceUnit) && isWeightUnit(productUnit)) {
-                        double totalAvailableKg = r.getTotalQty() * productSize * toKg(1, productUnit);
-                        double requestedAmountInKg = toKg(requestedQty, voiceUnit);
-                        if (totalAvailableKg >= requestedAmountInKg) {
-                            filteredList.add(r);
-                            break;
-                        }
-                        continue;
-                    }
-
-                    // Volume Unit Conversion Match
-                    if (isVolumeUnit(voiceUnit) && isVolumeUnit(productUnit)) {
-                        double totalAvailableL = r.getTotalQty() * productSize * toLitre(1, productUnit);
-                        double requestedAmountInL = toLitre(requestedQty, voiceUnit);
-                        if (totalAvailableL >= requestedAmountInL) {
-                            filteredList.add(r);
-                            break;
-                        }
-                        continue;
-                    }
-                } else if (!itemIsLoose && !requestedIsLooseValue) {
-                    // Case 2: Evaluate Packaged/Packet Items
-                    // (Triggers if explicitly requested packets OR if requestedIsLoose is null)
-
+            } else {
+                try {
                     int requiredPackets = calculateRequiredQty(r, requestedUnit, requestedQty, requestedIsLoose);
                     if (requiredPackets > 0 && r.getTotalQty() >= requiredPackets) {
                         filteredList.add(r);
-                        break;
-
                     }
-
+                } catch (RuntimeException e) {
+                    // If this is the explicit third turn where the user targeted packet, 
+                    // propagate the quantity mismatch error up immediately. Do not suppress it.
+                    if (requestedIsLoose != null && !requestedIsLoose) {
+                        throw e;
+                    }
                 }
-
             }
-
         }
 
         return filteredList;
-    }          
+    }
 
     /**
-     * Builds a candidate map from an InventorySummaryResponse object, extracting relevant fields and determining if the item is loose based on its name and packaging details.
-     * @param r
-     * @return
+     * Extracted common loose item matching criteria
      */
+    private static boolean matchesLooseCriteria(InventorySummaryResponse r, String voiceUnit, int requestedQty) {
+        String productUnit = r.getUnit() != null ? r.getUnit().trim().toLowerCase() : "";
+        Double productSize = r.getProductSize() != null ? r.getProductSize() : 1.0;
+
+        if (!productUnit.isEmpty() && productUnit.equalsIgnoreCase(voiceUnit)) {
+            return r.getTotalQty() >= requestedQty;
+        }
+
+        if (isWeightUnit(voiceUnit) && isWeightUnit(productUnit)) {
+            double totalAvailableKg = r.getTotalQty() * productSize * toKg(1, productUnit);
+            double requestedAmountInKg = toKg(requestedQty, voiceUnit);
+            return totalAvailableKg >= requestedAmountInKg;
+        }
+
+        if (isVolumeUnit(voiceUnit) && isVolumeUnit(productUnit)) {
+            double totalAvailableL = r.getTotalQty() * productSize * toLitre(1, productUnit);
+            double requestedAmountInL = toLitre(requestedQty, voiceUnit);
+            return totalAvailableL >= requestedAmountInL;
+        }
+
+        return false;
+    }
+
     public static Map<String, Object> buildCandidateMap(InventorySummaryResponse r) {
         String productName = r.getProductName() != null ? r.getProductName().toLowerCase() : "";
-        boolean itemIsLoose = productName.contains("loose") || 
+        boolean itemIsLoose = Boolean.TRUE.equals(r.isLoose()) || 
+                             productName.contains("loose") || 
                              r.getPacketSize() == null || 
                              r.getPacketSize() <= 0 || 
                              r.getPacketUnit() == null;
@@ -269,50 +176,20 @@ public final class HelperUtilities {
         );
     }
 
-    /**
-     * Determines if the provided unit string represents a weight measurement (e.g., kg, g, gm).
-     * This method performs case-insensitive checks and trims whitespace to ensure accurate identification of weight units.
-     * It returns true for recognized weight units and false otherwise.
-     * @param unit
-     * @return
-     */
     public static boolean isWeightUnit(String unit) {
         if (unit == null) return false;
         String cleanUnit = unit.trim().toLowerCase();
-        return cleanUnit.endsWith("kg") || 
-               cleanUnit.endsWith("gm") || 
-               cleanUnit.endsWith("g") || 
-               cleanUnit.contains("kilogram") || 
-               cleanUnit.contains("gram");
+        return cleanUnit.endsWith("kg") || cleanUnit.endsWith("gm") || cleanUnit.endsWith("g") || 
+               cleanUnit.contains("kilogram") || cleanUnit.contains("gram");
     }
-
-    /**
-     * Determines if the provided unit string represents a volume measurement (e.g., l, ml, liter).
-     * This method performs case-insensitive checks and trims whitespace to ensure accurate identification of volume units.
-     * It returns true for recognized volume units and false otherwise.
-     * @param unit
-     * @return
-     */
 
     public static boolean isVolumeUnit(String unit) {
         if (unit == null) return false;
         String cleanUnit = unit.trim().toLowerCase();
-        return cleanUnit.endsWith("l") || 
-               cleanUnit.endsWith("ltr") || 
-               cleanUnit.endsWith("ml") || 
-               cleanUnit.contains("liter") || 
-               cleanUnit.contains("litre") || 
-               cleanUnit.contains("milliliter");
+        return cleanUnit.endsWith("l") || cleanUnit.endsWith("ltr") || cleanUnit.endsWith("ml") || 
+               cleanUnit.contains("liter") || cleanUnit.contains("litre") || cleanUnit.contains("milliliter");
     }
 
-    /**
-     * Converts the given quantity from the specified unit to kilograms (kg).
-     * This method handles common weight units such as grams (g), kilograms (kg), and their variations, performing the necessary calculations to return the equivalent quantity in kilograms.
-     * If the unit is unrecognized or null, the method returns 0.
-     * @param qty
-     * @param unit
-     * @return
-     */
     public static double toKg(double qty, String unit) {
         if (unit == null) return 0;
         String cleanUnit = unit.trim().toLowerCase();
@@ -325,14 +202,6 @@ public final class HelperUtilities {
         return 0;
     }
 
-    /**
-     * Converts the given quantity from the specified unit to litres (l).
-     * This method handles common volume units such as millilitres (ml), litres (l), and their variations, performing the necessary calculations to return the equivalent quantity in litres.
-     * If the unit is unrecognized or null, the method returns 0.
-     * @param qty
-     * @param unit
-     * @return
-     */
     public static double toLitre(double qty, String unit) {
         if (unit == null) return 0;
         String cleanUnit = unit.trim().toLowerCase();
@@ -345,15 +214,6 @@ public final class HelperUtilities {
         return 0;
     }
 
-    /**
-     * Builds a multi-brand response for the API, including a prompt message, available brand options, and candidate product details.
-     * This method constructs a response map containing the prompt, options, multi-brand flag, quantity ignored flag, requested quantity and unit, and a list of candidate products with their relevant details.
-     * @param brands
-     * @param candidates
-     * @param qty
-     * @param unit
-     * @return
-     */
     public static ResponseEntity<Map<String, Object>> buildMultiBrandResponse(List<String> brands, List<InventorySummaryResponse> candidates, int qty, String unit) {
         Map<String, Object> body = new HashMap<>();
         body.put("prompt", buildBrandPrompt(brands));
@@ -366,11 +226,6 @@ public final class HelperUtilities {
         return ResponseEntity.ok(body);
     }
 
-    /**
-     * Builds a prompt message for selecting a brand from a list of available brands.
-     * @param brands
-     * @return
-     */ 
     public static String buildBrandPrompt(List<String> brands) {
         if (brands == null || brands.isEmpty()) {
             return "Multiple products found. Which brand do you want?";

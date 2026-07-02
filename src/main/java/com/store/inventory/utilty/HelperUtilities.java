@@ -2,6 +2,7 @@ package com.store.inventory.utilty;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -157,23 +158,29 @@ public final class HelperUtilities {
 
     public static Map<String, Object> buildCandidateMap(InventorySummaryResponse r) {
         String productName = r.getProductName() != null ? r.getProductName().toLowerCase() : "";
-        boolean itemIsLoose = Boolean.TRUE.equals(r.isLoose()) || 
-                             productName.contains("loose") || 
-                             r.getPacketSize() == null || 
-                             r.getPacketSize() <= 0 || 
-                             r.getPacketUnit() == null;
+        boolean itemIsLoose = Boolean.TRUE.equals(r.isLoose()) ||
+                productName.contains("loose") ||
+                r.getPacketSize() == null ||
+                r.getPacketSize() <= 0 ||
+                r.getPacketUnit() == null;
 
-        return Map.of(
-            "productId", r.getProductId() != null ? r.getProductId() : 0L,
-            "productSku", r.getProductSku() != null ? r.getProductSku() : "",
-            "productName", r.getProductName() != null ? r.getProductName() : "",
-            "brand", r.getBrandName() != null ? r.getBrandName() : "",
-            "unit", r.getUnit() != null ? r.getUnit() : "",
-            "totalQty", r.getTotalQty() != null ? r.getTotalQty() : 0,
-            "price", r.getPrice() != null ? r.getPrice() : 0.0,
-            "discountAmount", r.getDiscountAmount() != null ? r.getDiscountAmount() : 0.0,
-            "isLoose", itemIsLoose
-        );
+        Map<String, Object> map = new LinkedHashMap<>();
+
+        map.put("productId", r.getProductId());
+        map.put("productSku", r.getProductSku());
+        map.put("productName", r.getProductName());
+        map.put("brand", r.getBrandName());
+        map.put("unit", r.getUnit());
+        map.put("productSize", r.getProductSize());
+        map.put("packetSize", r.getPacketSize());
+        map.put("packetUnit", r.getPacketUnit());
+        map.put("totalQty", r.getTotalQty());
+        map.put("price", r.getPrice());
+        map.put("discountAmount", r.getDiscountAmount() != null ? r.getDiscountAmount() : 0.0);
+        map.put("isLoose", itemIsLoose);
+
+        return map;
+
     }
 
     public static boolean isWeightUnit(String unit) {
